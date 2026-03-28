@@ -13,6 +13,8 @@ func stub_combat():
     run_data["hp"] -= 3
     if run_data["hp"] <= 0:
         run_data["phase"] = "lose"
+    elif run_data["floor"] >= 7:
+        run_data["phase"] = "victory"
     else:
         run_data["phase"] = "reward"
 
@@ -36,10 +38,6 @@ func reward_upgrade(dice_type: String):
         dice["grade_exp"] = 0
         dice["grade"] += 1
 
-
-
-
-
 func run_step():
     match run_data["phase"]:
         "combat":
@@ -50,7 +48,7 @@ func run_step():
 
 func test_run():
     run_data["phase"] = "combat"
-    while run_data["phase"] not in ["lose"]:
+    while run_data["phase"] not in ["lose", "victory"]:
         print("Floor %d | HP %d | Phase %s" % [run_data["floor"], run_data["hp"], run_data["phase"]])
         run_step()
     print("결과: %s | Floor %d | HP %d" % [run_data["phase"], run_data["floor"], run_data["hp"]])
