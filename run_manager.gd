@@ -4,8 +4,8 @@ var run_data := {}
 
 func _ready() -> void:
     init_run()
-    test_run()
-    test_upgrade_path()
+    print(GameData.ENEMIES["slime"]["hp"])        # 15
+    print(GameData.FLOOR_ENCOUNTERS[4].size())     # 2
 
 func init_run():
     run_data = GameData.starting_data.duplicate(true)
