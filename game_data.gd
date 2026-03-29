@@ -9,7 +9,7 @@ const starting_data = {
         "boost":  { "grade": 1, "grade_exp": 0 },
         "heal":   { "grade": 1, "grade_exp": 0 },
     },
-    "phase": "waiting"
+    "phase": "title"
 }
 const GRADE_FACES = {
     1: [1,1,1,1,2,2,2],

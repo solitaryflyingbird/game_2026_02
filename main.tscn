@@ -1,3 +1,89 @@
 [gd_scene format=3 uid="uid://cbjg7djo286vw"]
 
+[ext_resource type="Script" uid="uid://b8bvqowkrti4r" path="res://run_ui.gd" id="1_ig7tw"]
+
 [node name="Main" type="Node2D" unique_id=1447001569]
+
+[node name="run_ui" type="Node2D" parent="." unique_id=443180052]
+script = ExtResource("1_ig7tw")
+
+[node name="title_screen" type="Control" parent="run_ui" unique_id=1813861609]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Label" type="Label" parent="run_ui/title_screen" unique_id=1723697995]
+layout_mode = 0
+offset_left = 482.0
+offset_top = 81.0
+offset_right = 738.0
+offset_bottom = 208.0
+text = "LAST MISSION
+최후의 임무
+폐기 직전 마지막 기회"
+
+[node name="Button" type="Button" parent="run_ui/title_screen" unique_id=2054452317]
+layout_mode = 0
+offset_left = 483.0
+offset_top = 261.0
+offset_right = 641.0
+offset_bottom = 319.0
+text = "시작"
+
+[node name="floor_screen" type="Control" parent="run_ui" unique_id=1121504737]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="floor_label" type="Label" parent="run_ui/floor_screen" unique_id=358428915]
+layout_mode = 0
+offset_left = 80.0
+offset_top = 60.0
+offset_right = 300.0
+offset_bottom = 120.0
+text = "FLOOR 01"
+
+[node name="hp_label" type="Label" parent="run_ui/floor_screen" unique_id=337096112]
+layout_mode = 0
+offset_left = 900.0
+offset_top = 60.0
+offset_right = 1200.0
+offset_bottom = 120.0
+text = "HP 30 / 30"
+horizontal_alignment = 2
+
+[node name="enemy_label" type="Label" parent="run_ui/floor_screen" unique_id=1272298859]
+layout_mode = 0
+offset_left = 80.0
+offset_top = 200.0
+offset_right = 600.0
+offset_bottom = 260.0
+text = "적 프리뷰: 슬라임 (HP 15)"
+
+[node name="battle_start_button" type="Button" parent="run_ui/floor_screen" unique_id=2090913206]
+layout_mode = 0
+offset_left = 490.0
+offset_top = 400.0
+offset_right = 790.0
+offset_bottom = 460.0
+text = "전투 개시"
+
+[node name="combat_screen" type="Control" parent="run_ui" unique_id=1116226702]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="reward_screen" type="Control" parent="run_ui" unique_id=564545111]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="result_screen" type="Control" parent="run_ui" unique_id=1953734017]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
