@@ -101,12 +101,12 @@ func _update_dice_buttons():
     for type in mapping:
         var btn = mapping[type]
         var grade = dice[type]["grade"]
-        var exp = dice[type]["grade_exp"]
+        var grade_exp = dice[type]["grade_exp"]
         if grade >= len(GameData.GRADE_FACES):
             btn.text = "%s\n등급 MAX" % labels[type]
             btn.disabled = true
         else:
-            btn.text = "%s\n등급 %d (%d/%d)" % [labels[type], grade, exp, grade]
+            btn.text = "%s\n등급 %d (%d/%d)" % [labels[type], grade, grade_exp, grade]
             btn.disabled = false
 
 # --- 적 프리뷰 ---
