@@ -1,3 +1,5 @@
+##배틀매니저
+
 extends Node
 
 signal turn_started
@@ -92,23 +94,33 @@ func draw_hand():
 # ============================
 
 func apply_attack(damage: int, target_index: int):
+    var before = combat_state["enemies"][target_index]["hp"]
     combat_state["enemies"][target_index]["hp"] -= damage
     combat_state["enemies"][target_index]["hp"] = max(0, combat_state["enemies"][target_index]["hp"])
+    var after = combat_state["enemies"][target_index]["hp"]
+    print("  [ATK] %s HP %d → %d (-%d)" % [
+        combat_state["enemies"][target_index]["name"], before, after, damage])
 
 
 func apply_block(shield_gain: int):
+    var before = combat_state["shield"]
     combat_state["shield"] += shield_gain
+    print("  [BLK] Shield %d → %d (+%d)" % [before, combat_state["shield"], shield_gain])
 
 
 func apply_heal(heal_amount: int):
+    var before = combat_state["player_hp"]
     combat_state["player_hp"] = min(
         combat_state["player_hp"] + heal_amount,
         combat_state["player_max_hp"]
     )
+    print("  [HEL] HP %d → %d (+%d)" % [before, combat_state["player_hp"], heal_amount])
 
 
 func apply_boost(boost_value: int):
+    var before = combat_state["boost_multiplier"]
     combat_state["boost_multiplier"] = boost_value
+    print("  [BST] Boost x%d → x%d" % [before, boost_value])
 
 
 func resolve_combo(cards: Array, target_index: int):
@@ -161,20 +173,29 @@ func get_alive_enemies() -> Array:
     return alive
 
 
-func apply_enemy_attack(skill_value: int):
+func apply_enemy_attack(skill_value: int, enemy_name: String = ""):
     var incoming = skill_value
+    var shield_before = combat_state["shield"]
+    var hp_before = combat_state["player_hp"]
     if combat_state["shield"] > 0:
         var absorbed = min(combat_state["shield"], incoming)
         combat_state["shield"] -= absorbed
         incoming -= absorbed
     combat_state["player_hp"] -= incoming
+    if shield_before > 0:
+        print("  [적] %s → ATK %d (Shield %d→%d 흡수, HP %d→%d)" % [
+            enemy_name, skill_value, shield_before, combat_state["shield"],
+            hp_before, combat_state["player_hp"]])
+    else:
+        print("  [적] %s → ATK %d (HP %d→%d)" % [
+            enemy_name, skill_value, hp_before, combat_state["player_hp"]])
 
 
 func enemy_turn():
     for i in get_alive_enemies():
         var enemy = combat_state["enemies"][i]
         var skill = enemy["skills"][randi() % enemy["skills"].size()]
-        apply_enemy_attack(skill["value"])
+        apply_enemy_attack(skill["value"], enemy["name"])
 
 
 # ============================
@@ -189,6 +210,13 @@ func return_hand():
 func start_turn():
     combat_state["turn"] += 1
     draw_hand()
+    var hand_str = []
+    for c in combat_state["hand"]:
+        hand_str.append("%s(%d)" % [c["type"], c["value"]])
+    print("── 턴 %d | HP %d | Shield %d | Boost x%d | 핸드: %s" % [
+        combat_state["turn"], combat_state["player_hp"],
+        combat_state["shield"], combat_state["boost_multiplier"],
+        ", ".join(hand_str)])
     turn_started.emit()
 
 
@@ -198,6 +226,10 @@ func submit_combo(cards: Array) -> bool:
     if not is_valid_combo(cards):
         return false
     combat_state["pending_combo"] = cards
+    var combo_str = []
+    for c in cards:
+        combo_str.append("%s(%d)" % [c["type"], c["value"]])
+    print("  → 조합 확정: %s" % ", ".join(combo_str))
     return true
 
 
