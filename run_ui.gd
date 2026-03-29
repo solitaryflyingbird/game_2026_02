@@ -18,6 +18,9 @@ func _ready():
     # 플로어
     $floor_screen/battle_start_button.pressed.connect(RunManager.start_combat)
 
+    # 전투 → 결과 수신
+    $combat_screen.combat_finished.connect(RunManager._on_combat_finished)
+
     # 보상 — 메인 3종
     $reward_screen/heal_button.pressed.connect(RunManager.finish_reward_heal)
     $reward_screen/maxhp_button.pressed.connect(RunManager.finish_reward_maxhp)
@@ -44,6 +47,10 @@ func _on_state_changed():
     var phase = RunManager.run_data["phase"]
     show_phase(phase)
     update_labels()
+
+    # combat 화면이 보이면 전투 시작
+    if phase == "combat":
+        $combat_screen.begin_combat()
 
 func show_phase(phase: String):
     for screen in screens.values():
@@ -101,12 +108,12 @@ func _update_dice_buttons():
     for type in mapping:
         var btn = mapping[type]
         var grade = dice[type]["grade"]
-        var grade_exp = dice[type]["grade_exp"]
+        var exp = dice[type]["grade_exp"]
         if grade >= len(GameData.GRADE_FACES):
             btn.text = "%s\n등급 MAX" % labels[type]
             btn.disabled = true
         else:
-            btn.text = "%s\n등급 %d (%d/%d)" % [labels[type], grade, grade_exp, grade]
+            btn.text = "%s\n등급 %d (%d/%d)" % [labels[type], grade, exp, grade]
             btn.disabled = false
 
 # --- 적 프리뷰 ---

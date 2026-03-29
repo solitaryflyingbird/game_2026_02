@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://cbjg7djo286vw"]
 
 [ext_resource type="Script" uid="uid://b8bvqowkrti4r" path="res://run_ui.gd" id="1_ig7tw"]
+[ext_resource type="Script" uid="uid://bqi5225vijgvk" path="res://combat_screen.gd" id="2_0xm2m"]
 
 [node name="Main" type="Node2D" unique_id=1447001569]
 
@@ -75,6 +76,7 @@ layout_mode = 3
 anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
+script = ExtResource("2_0xm2m")
 
 [node name="floor_label" type="Label" parent="run_ui/combat_screen" unique_id=856642668]
 layout_mode = 0

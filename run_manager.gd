@@ -11,13 +11,9 @@ func init_run():
     run_data = GameData.starting_data.duplicate(true)
     state_changed.emit()
 
-# --- 전투 ---
+# --- 전투 결과 수신 ---
 
-func real_combat():
-    var enemies = BattleManager.spawn_enemies(run_data["floor"])
-    var result = BattleManager.combat(
-        run_data["dice"], run_data["hp"], run_data["max_hp"], enemies, true
-    )
+func _on_combat_finished(result: Dictionary):
     run_data["hp"] = result["hp"]
     if result["outcome"] == "lose":
         run_data["phase"] = "lose"
@@ -57,11 +53,10 @@ func start_run():
     run_data["phase"] = "floor"
     state_changed.emit()
 
-## 플로어 → 전투
+## 플로어 → 전투 (phase만 전환, 실제 전투는 combat_ui가 시작)
 func start_combat():
     run_data["phase"] = "combat"
     state_changed.emit()
-    real_combat()
 
 ## 보상: 체력 회복 → 다음 층
 func finish_reward_heal():
@@ -94,7 +89,12 @@ func test_run():
         print("Floor %d | HP %d/%d | Phase %s" % [
             run_data["floor"], run_data["hp"], run_data["max_hp"], run_data["phase"]
         ])
-        real_combat()
+        # 테스트에서는 직접 combat() 호출
+        var enemies = BattleManager.spawn_enemies(run_data["floor"])
+        var result = BattleManager.combat(
+            run_data["dice"], run_data["hp"], run_data["max_hp"], enemies, true
+        )
+        _on_combat_finished(result)
         if run_data["phase"] == "reward":
             reward_heal()
             print("  → 보상: 체력 회복 → HP %d/%d" % [run_data["hp"], run_data["max_hp"]])

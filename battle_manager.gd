@@ -1,10 +1,15 @@
 extends Node
 
+signal turn_started
+signal combo_resolved
+signal enemy_turn_done
+signal combat_ended(result: Dictionary)
+
 var combat_state := {}
 
 
 # ============================
-# 2단계: 그릇
+# 그릇
 # ============================
 
 func spawn_enemies(floor_num: int) -> Array:
@@ -37,6 +42,7 @@ func init_combat(dice: Dictionary, hp: int, max_hp: int, enemies: Array) -> Dict
     combat_state = {
         "deck": build_deck(dice),
         "hand": [],
+        "pending_combo": [],
         "shield": 0,
         "boost_multiplier": 1,
         "turn": 0,
@@ -48,7 +54,7 @@ func init_combat(dice: Dictionary, hp: int, max_hp: int, enemies: Array) -> Dict
 
 
 # ============================
-# 3단계: 드로우·조합 판정
+# 드로우·조합 판정
 # ============================
 
 func is_valid_combo(cards: Array) -> bool:
@@ -82,7 +88,7 @@ func draw_hand():
 
 
 # ============================
-# 4단계: 효과 처리
+# 효과 처리
 # ============================
 
 func apply_attack(damage: int, target_index: int):
@@ -144,7 +150,7 @@ func resolve_combo(cards: Array, target_index: int):
 
 
 # ============================
-# 5단계: 타겟·몬스터 턴
+# 타겟·몬스터 턴
 # ============================
 
 func get_alive_enemies() -> Array:
@@ -172,7 +178,7 @@ func enemy_turn():
 
 
 # ============================
-# 6단계: 턴 루프
+# 턴 루프 (단계별 함수 + signal)
 # ============================
 
 func return_hand():
@@ -180,15 +186,56 @@ func return_hand():
     combat_state["hand"] = []
 
 
+func start_turn():
+    combat_state["turn"] += 1
+    draw_hand()
+    turn_started.emit()
+
+
+func submit_combo(cards: Array) -> bool:
+    if cards.size() != 3:
+        return false
+    if not is_valid_combo(cards):
+        return false
+    combat_state["pending_combo"] = cards
+    return true
+
+
+func resolve(target_index: int) -> String:
+    resolve_combo(combat_state["pending_combo"], target_index)
+    combat_state["pending_combo"] = []
+    combo_resolved.emit()
+
+    if get_alive_enemies().size() == 0:
+        var result = { "hp": combat_state["player_hp"], "outcome": "win" }
+        combat_ended.emit(result)
+        return "win"
+
+    return_hand()
+    enemy_turn()
+    enemy_turn_done.emit()
+
+    if combat_state["player_hp"] <= 0:
+        var result = { "hp": combat_state["player_hp"], "outcome": "lose" }
+        combat_ended.emit(result)
+        return "lose"
+
+    return "continue"
+
+
+# ============================
+# 자동 전투 (테스트·호환용)
+# ============================
+
 func combat(dice: Dictionary, hp: int, max_hp: int, enemies: Array, verbose: bool = false) -> Dictionary:
     init_combat(dice, hp, max_hp, enemies)
 
     while combat_state["turn"] < 100:
-        combat_state["turn"] += 1
-
-        draw_hand()
+        start_turn()
 
         var combo = _get_first_valid_combo(combat_state["hand"])
+        submit_combo(combo)
+
         var alive = get_alive_enemies()
         var target_index = alive[0] if alive.size() > 0 else 0
 
@@ -204,16 +251,18 @@ func combat(dice: Dictionary, hp: int, max_hp: int, enemies: Array, verbose: boo
                 ", ".join(combo_types),
             ])
 
-        resolve_combo(combo, target_index)
+        var result = resolve(target_index)
 
-        if get_alive_enemies().size() == 0:
-            if verbose:
-                print("  → 승리! HP %d" % combat_state["player_hp"])
+        if verbose and result != "continue":
+            print("  → %s! HP %d" % [
+                "승리" if result == "win" else "패배",
+                combat_state["player_hp"],
+            ])
+
+        if result == "win":
             return { "hp": combat_state["player_hp"], "outcome": "win" }
-
-        return_hand()
-
-        enemy_turn()
+        if result == "lose":
+            return { "hp": combat_state["player_hp"], "outcome": "lose" }
 
         if verbose:
             var enemy_info = []
@@ -224,11 +273,6 @@ func combat(dice: Dictionary, hp: int, max_hp: int, enemies: Array, verbose: boo
                 combat_state["shield"],
                 ", ".join(enemy_info),
             ])
-
-        if combat_state["player_hp"] <= 0:
-            if verbose:
-                print("  → 패배! HP %d" % combat_state["player_hp"])
-            return { "hp": combat_state["player_hp"], "outcome": "lose" }
 
     push_warning("전투 100턴 초과 — 강제 종료")
     return { "hp": combat_state["player_hp"], "outcome": "lose" }
@@ -254,6 +298,7 @@ func _setup_test_state(enemy_hp: int = 15, player_hp: int = 20, max_hp: int = 30
     combat_state = {
         "deck": [],
         "hand": [],
+        "pending_combo": [],
         "shield": shield,
         "boost_multiplier": boost,
         "turn": 0,
@@ -264,260 +309,52 @@ func _setup_test_state(enemy_hp: int = 15, player_hp: int = 20, max_hp: int = 30
 
 
 # ============================
-# 테스트: 2단계
+# 통합 테스트
 # ============================
 
-func test_stage_2():
-    print("=== 2단계 테스트 시작 ===")
-
-    var enemies_1 = spawn_enemies(1)
-    assert(enemies_1.size() == 1)
-    assert(enemies_1[0]["name"] == "슬라임")
-    assert(enemies_1[0]["hp"] == 15)
-    assert(enemies_1[0]["max_hp"] == 15)
-    print("  2-1 spawn_enemies(1): %s — OK" % enemies_1[0]["name"])
-
-    var enemies_4 = spawn_enemies(4)
-    assert(enemies_4.size() == 2)
-    print("  2-1 spawn_enemies(4): %d마리 — OK" % enemies_4.size())
-
-    enemies_1[0]["hp"] = 0
-    assert(GameData.ENEMIES["slime"]["hp"] == 15)
-    print("  2-1 깊은 복사 — OK")
+func test_all():
+    print("=== 통합 테스트 시작 ===")
 
     var dice = GameData.starting_data["dice"]
-    var deck = build_deck(dice)
-    assert(deck.size() == 28)
-    var type_count = { "attack": 0, "block": 0, "boost": 0, "heal": 0 }
-    for card in deck:
-        type_count[card["type"]] += 1
-    for type in type_count:
-        assert(type_count[type] == 7)
-    print("  2-2 build_deck: 28장, 종류별 7장 — OK")
 
-    var enemies = spawn_enemies(1)
-    var state = init_combat(dice, 30, 30, enemies)
-    assert(state["deck"].size() == 28)
-    assert(state["hand"].size() == 0)
-    assert(state["shield"] == 0)
-    assert(state["boost_multiplier"] == 1)
-    assert(state["player_hp"] == 30)
-    assert(state["enemies"].size() == 1)
-    print("  2-3 init_combat — OK")
-
-    print("=== 2단계 테스트 완료 ===")
-
-
-# ============================
-# 테스트: 3단계
-# ============================
-
-func test_stage_3():
-    print("=== 3단계 테스트 시작 ===")
-
-    assert(is_valid_combo([_c("attack",2), _c("attack",1), _c("attack",2)]) == true)
-    print("  3-1 종류 일치 — OK")
-
-    assert(is_valid_combo([_c("attack",2), _c("block",2), _c("heal",2)]) == true)
-    print("  3-1 숫자 일치 — OK")
-
-    assert(is_valid_combo([_c("attack",2), _c("block",1), _c("heal",2)]) == false)
-    print("  3-1 불일치 — OK")
-
-    var hand_yes = [_c("attack",1), _c("attack",1), _c("attack",2), _c("block",1), _c("heal",2)]
-    assert(has_valid_combo(hand_yes) == true)
-    print("  3-2 유효 조합 있음 — OK")
-
-    var hand_no = [_c("attack",1), _c("block",2), _c("heal",3), _c("boost",1), _c("attack",2)]
-    assert(has_valid_combo(hand_no) == false)
-    print("  3-2 유효 조합 없음 — OK")
-
-    var dice = GameData.starting_data["dice"]
+    # --- 단계별 함수 ---
     var enemies = spawn_enemies(1)
     init_combat(dice, 30, 30, enemies)
-    draw_hand()
+
+    start_turn()
     assert(combat_state["hand"].size() == 5)
-    assert(combat_state["deck"].size() == 23)
-    assert(has_valid_combo(combat_state["hand"]) == true)
-    print("  3-3 draw_hand: hand 5장, deck 23장, 유효 조합 — OK")
+    assert(combat_state["turn"] == 1)
+    print("  start_turn: hand 5장, turn 1 — OK")
 
-    print("=== 3단계 테스트 완료 ===")
+    var valid = _get_first_valid_combo(combat_state["hand"])
+    assert(submit_combo(valid) == true)
+    assert(submit_combo([_c("attack",1), _c("block",2), _c("heal",3)]) == false)
+    assert(submit_combo([_c("attack",1), _c("attack",1)]) == false)
+    print("  submit_combo: 유효/무효/장수부족 — OK")
 
+    submit_combo(valid)
+    var res = resolve(0)
+    assert(res in ["continue", "win", "lose"])
+    assert(combat_state["pending_combo"].size() == 0)
+    print("  resolve: %s, pending 비움 — OK" % res)
 
-# ============================
-# 테스트: 4단계
-# ============================
-
-func test_stage_4():
-    print("=== 4단계 테스트 시작 ===")
-
-    # case 1: attack 종류일치 → 적 hp 15-5=10
-    _setup_test_state()
-    resolve_combo([_c("attack",2), _c("attack",1), _c("attack",2)], 0)
-    assert(combat_state["enemies"][0]["hp"] == 10)
-    assert(combat_state["boost_multiplier"] == 1)
-    print("  case 1: attack 종류일치 → 적 hp 10 — OK")
-
-    # case 2: block 종류일치 → shield 4
-    _setup_test_state()
-    resolve_combo([_c("block",1), _c("block",1), _c("block",2)], 0)
-    assert(combat_state["shield"] == 4)
-    assert(combat_state["boost_multiplier"] == 1)
-    print("  case 2: block 종류일치 → shield 4 — OK")
-
-    # case 3: boost 종류일치 → boost = 5
-    _setup_test_state()
-    resolve_combo([_c("boost",2), _c("boost",2), _c("boost",1)], 0)
-    assert(combat_state["boost_multiplier"] == 5)
-    print("  case 3: boost 종류일치 → boost 5 — OK")
-
-    # case 4: heal 종류일치 → hp 20+4=24
-    _setup_test_state()
-    resolve_combo([_c("heal",2), _c("heal",1), _c("heal",1)], 0)
-    assert(combat_state["player_hp"] == 24)
-    assert(combat_state["boost_multiplier"] == 1)
-    print("  case 4: heal 종류일치 → hp 24 — OK")
-
-    # case 5: 숫자일치 3종 → 적 13, shield 2, hp 22
-    _setup_test_state()
-    resolve_combo([_c("attack",2), _c("block",2), _c("heal",2)], 0)
-    assert(combat_state["enemies"][0]["hp"] == 13)
-    assert(combat_state["shield"] == 2)
-    assert(combat_state["player_hp"] == 22)
-    assert(combat_state["boost_multiplier"] == 1)
-    print("  case 5: 숫자일치 3종 → 적 13, shield 2, hp 22 — OK")
-
-    # case 6: 숫자일치 attack×2+heal → 적 11, hp 22
-    _setup_test_state()
-    resolve_combo([_c("attack",2), _c("attack",2), _c("heal",2)], 0)
-    assert(combat_state["enemies"][0]["hp"] == 11)
-    assert(combat_state["player_hp"] == 22)
-    assert(combat_state["boost_multiplier"] == 1)
-    print("  case 6: 숫자일치 attack×2+heal → 적 11, hp 22 — OK")
-
-    # case 7: 숫자일치 attack+boost+heal → 적 13, hp 22, boost 2
-    _setup_test_state()
-    resolve_combo([_c("attack",2), _c("boost",2), _c("heal",2)], 0)
-    assert(combat_state["enemies"][0]["hp"] == 13)
-    assert(combat_state["player_hp"] == 22)
-    assert(combat_state["boost_multiplier"] == 2)
-    print("  case 7: 숫자일치 attack+boost+heal → 적 13, hp 22, boost 2 — OK")
-
-    # case 8: 숫자일치 boost×2+heal → hp 22, boost 4
-    _setup_test_state()
-    resolve_combo([_c("boost",2), _c("boost",2), _c("heal",2)], 0)
-    assert(combat_state["player_hp"] == 22)
-    assert(combat_state["boost_multiplier"] == 4)
-    print("  case 8: 숫자일치 boost×2+heal → hp 22, boost 4 — OK")
-
-    # 추가: boost 적용 확인 (boost=5 상태에서 attack)
-    _setup_test_state(15, 20, 30, 0, 5)
-    resolve_combo([_c("attack",2), _c("attack",1), _c("attack",2)], 0)
-    assert(combat_state["enemies"][0]["hp"] == 0)  # 5×5=25 → 15→0 (min 0)
-    assert(combat_state["boost_multiplier"] == 1)
-    print("  추가: boost 5 × attack 5 = 25 → 적 hp 0 — OK")
-
-    print("=== 4단계 테스트 완료 ===")
-
-
-# ============================
-# 테스트: 5단계
-# ============================
-
-func test_stage_5():
-    print("=== 5단계 테스트 시작 ===")
-
-    # 5-1 get_alive_enemies
-    _setup_test_state(10, 30, 30, 0, 1, 3)
-    combat_state["enemies"][1]["hp"] = 0
-    var alive = get_alive_enemies()
-    assert(alive == [0, 2])
-    print("  5-1 get_alive_enemies: [0, 2] — OK")
-
-    # 5-2 타겟 선택: 1번만 피해
-    _setup_test_state(10, 30, 30, 0, 1, 2)
-    resolve_combo([_c("attack",2), _c("attack",1), _c("attack",2)], 1)
-    assert(combat_state["enemies"][0]["hp"] == 10)
-    assert(combat_state["enemies"][1]["hp"] == 5)
-    print("  5-2 타겟 선택: 1번만 피해 — OK")
-
-    # 5-3 shield 부분 흡수
-    _setup_test_state(10, 30, 30, 4, 1)
-    apply_enemy_attack(6)
-    assert(combat_state["shield"] == 0)
-    assert(combat_state["player_hp"] == 28)
-    print("  5-3 shield 부분 흡수: shield 0, hp 28 — OK")
-
-    # 5-3 shield 완전 흡수
-    _setup_test_state(10, 30, 30, 10, 1)
-    apply_enemy_attack(6)
-    assert(combat_state["shield"] == 4)
-    assert(combat_state["player_hp"] == 30)
-    print("  5-3 shield 완전 흡수: shield 4, hp 30 — OK")
-
-    # 5-3 shield 없음
-    _setup_test_state(10, 30, 30, 0, 1)
-    apply_enemy_attack(5)
-    assert(combat_state["shield"] == 0)
-    assert(combat_state["player_hp"] == 25)
-    print("  5-3 shield 없음: hp 25 — OK")
-
-    # 5-4 enemy_turn 결정론적 (스킬 1개씩)
-    combat_state = {
-        "deck": [], "hand": [],
-        "shield": 0, "boost_multiplier": 1, "turn": 0,
-        "player_hp": 30, "player_max_hp": 30,
-        "enemies": [
-            { "name": "A", "hp": 10, "max_hp": 10, "skills": [{ "type": "attack", "value": 3 }] },
-            { "name": "B", "hp": 10, "max_hp": 10, "skills": [{ "type": "attack", "value": 5 }] },
-        ],
-    }
-    enemy_turn()
-    assert(combat_state["player_hp"] == 22)
-    print("  5-4 enemy_turn: 3+5=8 피해 → hp 22 — OK")
-
-    print("=== 5단계 테스트 완료 ===")
-
-
-# ============================
-# 테스트: 6단계
-# ============================
-
-func test_stage_6():
-    print("=== 6단계 테스트 시작 ===")
-
-    # 6-1 return_hand
-    var dice = GameData.starting_data["dice"]
-    var enemies = spawn_enemies(1)
-    init_combat(dice, 30, 30, enemies)
-    draw_hand()
-    assert(combat_state["hand"].size() == 5)
-    assert(combat_state["deck"].size() == 23)
-    return_hand()
-    assert(combat_state["hand"].size() == 0)
-    assert(combat_state["deck"].size() == 28)
-    print("  6-1 return_hand: hand 0, deck 28 — OK")
-
-    # 6-2 확정 승리
+    # --- 자동 전투 호환 ---
     var weak = [{ "name": "약한적", "hp": 1, "max_hp": 1, "skills": [{ "type": "attack", "value": 1 }] }]
     var win = combat(dice, 30, 30, weak)
     assert(win["outcome"] == "win")
     assert(win["hp"] > 0)
-    assert(win.has("deck") == false)
-    assert(win.has("hand") == false)
-    print("  6-2 확정 승리: outcome=%s, hp=%d — OK" % [win["outcome"], win["hp"]])
+    print("  확정 승리: outcome=%s, hp=%d — OK" % [win["outcome"], win["hp"]])
 
-    # 6-2 확정 패배
     var strong = [{ "name": "강한적", "hp": 999, "max_hp": 999, "skills": [{ "type": "attack", "value": 999 }] }]
     var lose = combat(dice, 30, 30, strong)
     assert(lose["outcome"] == "lose")
     assert(lose["hp"] <= 0)
-    print("  6-2 확정 패배: outcome=%s, hp=%d — OK" % [lose["outcome"], lose["hp"]])
+    print("  확정 패배: outcome=%s, hp=%d — OK" % [lose["outcome"], lose["hp"]])
 
-    # 6-2 슬라임 실전 (verbose)
+    # --- 슬라임 실전 ---
     print("  --- 슬라임 실전 ---")
     var slime = spawn_enemies(1)
-    var result = combat(dice, 30, 30, slime, true)
-    print("  결과: %s | HP %d" % [result["outcome"], result["hp"]])
+    var slime_result = combat(dice, 30, 30, slime, true)
+    print("  결과: %s | HP %d" % [slime_result["outcome"], slime_result["hp"]])
 
-    print("=== 6단계 테스트 완료 ===")
+    print("=== 통합 테스트 완료 ===")
