@@ -4,7 +4,7 @@ var run_data := {}
 
 func _ready() -> void:
     init_run()
-    test_run()
+    test_all()
 
 func init_run():
     run_data = GameData.starting_data.duplicate(true)
@@ -72,3 +72,18 @@ func test_run_with_rewards():
             run_data["phase"] = "combat"
     print("결과: %s | Floor %d | HP %d/%d" % [run_data["phase"], run_data["floor"], run_data["hp"], run_data["max_hp"]])
     print("최종 주사위: %s" % str(run_data["dice"]))
+
+func test_all():
+    print("========== 런 매니저 테스트 ==========")
+    test_run()
+    print("")
+    test_run_with_rewards()
+    print("")
+    print("========== 배틀 매니저 테스트 ==========")
+    BattleManager.test_stage_2()
+    BattleManager.test_stage_3()
+    BattleManager.test_stage_4()
+    BattleManager.test_stage_5()
+    BattleManager.test_stage_6()
+    print("")
+    print("========== 전체 테스트 완료 ==========")

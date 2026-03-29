@@ -18,6 +18,8 @@ config/icon="res://icon.svg"
 
 LimboConsole="*uid://dyxornv8vwibg"
 GameData="*uid://c52s14g1q8ryq"
+RunManager="*uid://6tcuo47kk56g"
+BattleManager="*uid://bs0o5t0vjyssw"
 
 [editor_plugins]
 
