@@ -19,24 +19,24 @@ const GRADE_FACES = {
 }
 
 const ENEMIES = {
-    "slime": {
-        "name": "슬라임",
+    "scout_drone": {
+        "name": "정찰 드론",
         "hp": 15,
         "skills": [
             { "type": "attack", "value": 3 },
             { "type": "attack", "value": 5 },
         ],
     },
-    "goblin": {
-        "name": "고블린",
+    "assault_drone": {
+        "name": "강습 드론",
         "hp": 20,
         "skills": [
             { "type": "attack", "value": 4 },
             { "type": "attack", "value": 6 },
         ],
     },
-    "golem": {
-        "name": "골렘",
+    "heavy_mech": {
+        "name": "중장갑 메카",
         "hp": 30,
         "skills": [
             { "type": "attack", "value": 4 },
@@ -45,12 +45,12 @@ const ENEMIES = {
         ],
     },
 }
- 
+
 const FLOOR_ENCOUNTERS = {
-    1: ["slime"],
-    2: ["slime", "slime"],
-    3: ["goblin"],
-    4: ["goblin", "slime"],
-    5: ["golem"],
-    6: ["golem", "goblin"],
+    1: ["scout_drone"],
+    2: ["scout_drone", "scout_drone"],
+    3: ["assault_drone"],
+    4: ["assault_drone", "scout_drone"],
+    5: ["heavy_mech"],
+    6: ["heavy_mech", "assault_drone"],
 }
