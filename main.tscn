@@ -2,6 +2,47 @@
 
 [ext_resource type="Script" uid="uid://b8bvqowkrti4r" path="res://run_ui.gd" id="1_ig7tw"]
 [ext_resource type="Script" uid="uid://bqi5225vijgvk" path="res://combat_screen.gd" id="2_0xm2m"]
+[ext_resource type="Texture2D" uid="uid://bu4xcq8yddd4t" path="res://에셋/타이틀/로고.png" id="3_logo"]
+[ext_resource type="Texture2D" uid="uid://dhj0q8nr1qrkn" path="res://에셋/타이틀/1.png" id="4_ch1"]
+[ext_resource type="Texture2D" uid="uid://df52j4lj3o7td" path="res://에셋/타이틀/2.png" id="5_ch2"]
+[ext_resource type="Texture2D" uid="uid://csgfedootymk8" path="res://에셋/타이틀/3.png" id="6_ch3"]
+[ext_resource type="Texture2D" uid="uid://by1kuq40s1swk" path="res://에셋/타이틀/4.png" id="7_ch4"]
+[ext_resource type="Texture2D" uid="uid://wofumr1exxeb" path="res://에셋/타이틀/5.png" id="8_ch5"]
+[ext_resource type="Texture2D" uid="uid://0bgbtoiorip4" path="res://에셋/타이틀/6.png" id="9_ch6"]
+[ext_resource type="Texture2D" uid="uid://gmc462r3rd1e" path="res://에셋/타이틀/7.png" id="10_ch7"]
+[ext_resource type="Texture2D" uid="uid://ba1y1qqqsb0jq" path="res://에셋/타이틀/8.png" id="11_ch8"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_idle"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("4_ch1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_ch2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("6_ch3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("7_ch4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("8_ch5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_ch6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("10_ch7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("11_ch8")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 8.0
+}]
 
 [node name="Main" type="Node2D" unique_id=1447001569]
 
@@ -14,23 +55,54 @@ anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
 
-[node name="Label" type="Label" parent="run_ui/title_screen" unique_id=1723697995]
-layout_mode = 0
-offset_left = 482.0
-offset_top = 81.0
-offset_right = 738.0
-offset_bottom = 208.0
-text = "LAST MISSION
-최후의 임무
-폐기 직전 마지막 기회"
+[node name="character_idle" type="AnimatedSprite2D" parent="run_ui/title_screen" unique_id=685858756]
+position = Vector2(900, 380)
+sprite_frames = SubResource("SpriteFrames_idle")
+animation = &"idle"
+autoplay = "idle"
 
-[node name="Button" type="Button" parent="run_ui/title_screen" unique_id=2054452317]
+[node name="logo" type="TextureRect" parent="run_ui/title_screen" unique_id=1723697995]
 layout_mode = 0
-offset_left = 483.0
-offset_top = 261.0
-offset_right = 641.0
-offset_bottom = 319.0
+offset_left = 60.0
+offset_top = 40.0
+offset_right = 620.0
+offset_bottom = 360.0
+texture = ExtResource("3_logo")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="subtitle_label" type="Label" parent="run_ui/title_screen" unique_id=363638921]
+layout_mode = 0
+offset_left = 80.0
+offset_top = 370.0
+offset_right = 600.0
+offset_bottom = 410.0
+text = "설령 이 몸이 부서져도"
+horizontal_alignment = 1
+
+[node name="start_button" type="Button" parent="run_ui/title_screen" unique_id=2054452317]
+layout_mode = 0
+offset_left = 180.0
+offset_top = 440.0
+offset_right = 500.0
+offset_bottom = 500.0
 text = "시작"
+
+[node name="load_button" type="Button" parent="run_ui/title_screen" unique_id=1958273356]
+layout_mode = 0
+offset_left = 180.0
+offset_top = 520.0
+offset_right = 500.0
+offset_bottom = 580.0
+text = "불러오기"
+
+[node name="quit_button" type="Button" parent="run_ui/title_screen" unique_id=1700237368]
+layout_mode = 0
+offset_left = 180.0
+offset_top = 600.0
+offset_right = 500.0
+offset_bottom = 660.0
+text = "종료"
 
 [node name="floor_screen" type="Control" parent="run_ui" unique_id=1121504737]
 layout_mode = 3

@@ -13,7 +13,9 @@ func _ready():
     RunManager.state_changed.connect(_on_state_changed)
 
     # 타이틀
-    $title_screen/Button.pressed.connect(RunManager.start_run)
+    $title_screen/start_button.pressed.connect(RunManager.start_run)
+    $title_screen/load_button.pressed.connect(_on_load_pressed)
+    $title_screen/quit_button.pressed.connect(_on_quit_pressed)
 
     # 플로어
     $floor_screen/battle_start_button.pressed.connect(RunManager.start_combat)
@@ -117,6 +119,12 @@ func _update_dice_buttons():
             btn.disabled = false
 
 # --- 적 프리뷰 ---
+
+func _on_load_pressed():
+    print("[title] 불러오기: 아직 구현되지 않음")
+
+func _on_quit_pressed():
+    get_tree().quit()
 
 func _update_enemy_preview():
     var floor_num = RunManager.run_data["floor"]
