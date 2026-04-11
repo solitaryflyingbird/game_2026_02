@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bfug2csw38nfx"
-path="res://.godot/imported/button_안D_더블라인.svg-d8e89a73e1c14221e0de347073d449e6.ctex"
+uid="uid://c06whrymyuqy"
+path="res://.godot/imported/city_안2_폐허산업.png-bd642e63eaf387c893f3e261097a6b0b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://mockup/button_안D_더블라인.svg"
-dest_files=["res://.godot/imported/button_안D_더블라인.svg-d8e89a73e1c14221e0de347073d449e6.ctex"]
+source_file="res://mockup/city_안2_폐허산업.png"
+dest_files=["res://.godot/imported/city_안2_폐허산업.png-bd642e63eaf387c893f3e261097a6b0b.ctex"]
 
 [params]
 
@@ -38,6 +38,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false

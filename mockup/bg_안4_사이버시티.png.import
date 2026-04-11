@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cbf2cmcynv7yd"
-path="res://.godot/imported/layout_안ㄷ_중앙종축.png-4108bc903f5aab5c19c0bf2b1e31c648.ctex"
+uid="uid://owep787kkft3"
+path="res://.godot/imported/bg_안4_사이버시티.png-81a3dcf6a124ce8e91ebec0c9e4d6bd0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://mockup/layout_안ㄷ_중앙종축.png"
-dest_files=["res://.godot/imported/layout_안ㄷ_중앙종축.png-4108bc903f5aab5c19c0bf2b1e31c648.ctex"]
+source_file="res://mockup/bg_안4_사이버시티.png"
+dest_files=["res://.godot/imported/bg_안4_사이버시티.png-81a3dcf6a124ce8e91ebec0c9e4d6bd0.ctex"]
 
 [params]
 

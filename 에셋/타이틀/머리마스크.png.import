@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://35yl50fk3qjn"
-path="res://.godot/imported/button_안A_사이드바.svg-fd32da0c089c765ad533a433b9af2d5e.ctex"
+uid="uid://b7j8txjoqvx5"
+path="res://.godot/imported/머리마스크.png-5def15966e48d79265c4c3a22a7f6b70.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://mockup/button_안A_사이드바.svg"
-dest_files=["res://.godot/imported/button_안A_사이드바.svg-fd32da0c089c765ad533a433b9af2d5e.ctex"]
+source_file="res://에셋/타이틀/머리마스크.png"
+dest_files=["res://.godot/imported/머리마스크.png-5def15966e48d79265c4c3a22a7f6b70.ctex"]
 
 [params]
 
@@ -38,6 +38,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false

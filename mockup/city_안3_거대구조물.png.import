@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bltdw7pufsxrg"
-path="res://.godot/imported/button_안C_각진미니멀.svg-6cda3dc69e05a43942bda4cd852483c0.ctex"
+uid="uid://dvodjjooyyi64"
+path="res://.godot/imported/city_안3_거대구조물.png-488b9aaf19bb1cee5311bb2ea340bbb5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://mockup/button_안C_각진미니멀.svg"
-dest_files=["res://.godot/imported/button_안C_각진미니멀.svg-6cda3dc69e05a43942bda4cd852483c0.ctex"]
+source_file="res://mockup/city_안3_거대구조물.png"
+dest_files=["res://.godot/imported/city_안3_거대구조물.png-488b9aaf19bb1cee5311bb2ea340bbb5.ctex"]
 
 [params]
 
@@ -38,6 +38,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false

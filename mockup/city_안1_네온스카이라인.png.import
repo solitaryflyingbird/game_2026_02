@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bctdip4vwrou6"
-path="res://.godot/imported/layout_안ㄹ_하단가로.png-2f3ab6b66cff90c3cea4022fb68585e1.ctex"
+uid="uid://dp4mywtqup0ce"
+path="res://.godot/imported/city_안1_네온스카이라인.png-28efb2a9d852205ce829b2834e002620.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://mockup/layout_안ㄹ_하단가로.png"
-dest_files=["res://.godot/imported/layout_안ㄹ_하단가로.png-2f3ab6b66cff90c3cea4022fb68585e1.ctex"]
+source_file="res://mockup/city_안1_네온스카이라인.png"
+dest_files=["res://.godot/imported/city_안1_네온스카이라인.png-28efb2a9d852205ce829b2834e002620.ctex"]
 
 [params]
 

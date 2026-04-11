@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dion6sg3knh86"
-path="res://.godot/imported/layout_안ㄴ_우측메뉴.png-db914dbe7b4f59da5269843a4ab9d505.ctex"
+uid="uid://boqbijms2al3d"
+path="res://.godot/imported/bg_안5_와이어프레임.png-6d730597ad328ba6c21777399681c547.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://mockup/layout_안ㄴ_우측메뉴.png"
-dest_files=["res://.godot/imported/layout_안ㄴ_우측메뉴.png-db914dbe7b4f59da5269843a4ab9d505.ctex"]
+source_file="res://mockup/bg_안5_와이어프레임.png"
+dest_files=["res://.godot/imported/bg_안5_와이어프레임.png-6d730597ad328ba6c21777399681c547.ctex"]
 
 [params]
 
