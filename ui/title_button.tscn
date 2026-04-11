@@ -1,0 +1,45 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/title_button.gd" id="1_btn"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_pad"]
+content_margin_left = 44.0
+content_margin_top = 0.0
+content_margin_right = 12.0
+content_margin_bottom = 0.0
+
+[node name="TitleButton" type="Button"]
+custom_minimum_size = Vector2(360, 60)
+focus_mode = 1
+flat = true
+theme_override_colors/font_color = Color(0.784, 0.824, 0.871, 1)
+theme_override_colors/font_hover_color = Color(0.357, 0.753, 0.925, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
+theme_override_colors/font_focus_color = Color(0.357, 0.753, 0.925, 1)
+theme_override_font_sizes/font_size = 22
+theme_override_styles/normal = SubResource("StyleBoxEmpty_pad")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_pad")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_pad")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_pad")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_pad")
+text = "버튼"
+alignment = 0
+script = ExtResource("1_btn")
+
+[node name="bg" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 1, 1, 0.06)
+
+[node name="bar" type="ColorRect" parent="."]
+layout_mode = 0
+offset_top = 18.0
+offset_right = 4.0
+offset_bottom = 42.0
+mouse_filter = 2
+color = Color(0.357, 0.753, 0.925, 1)
