@@ -9,7 +9,7 @@ func _ready() -> void:
 
 func init_run():
     run_data = GameData.starting_data.duplicate(true)
-    run_data["deck"] = GameData.STARTING_DECK.duplicate()
+    run_data["deck"] = GameData.make_starting_deck()
     state_changed.emit()
 
 # --- 전투 결과 수신 ---
