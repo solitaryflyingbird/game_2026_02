@@ -55,10 +55,6 @@ func begin_combat():
     pending_card_index = -1
     log_label.text = ""
     end_turn_button.visible = true
-
-    var d = RunManager.run_data
-    BattleManager.start_combat(d["deck"], d["hp"], d["max_hp"], ["test_dummy"])
-    BattleManager.start_turn()
     _refresh_ui()
 
 # ============================================================

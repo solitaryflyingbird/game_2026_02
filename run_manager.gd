@@ -39,8 +39,15 @@ func start_run():
     state_changed.emit()
 
 func start_combat():
+    var enemy_ids = _get_enemies_for_floor(run_data["floor"])
+    BattleManager.start_combat(run_data["deck"], run_data["hp"], run_data["max_hp"], enemy_ids)
+    BattleManager.start_turn()
     run_data["phase"] = "combat"
     state_changed.emit()
+
+func _get_enemies_for_floor(_floor: int) -> Array:
+    # 추후 층 데이터에서 조회. 지금은 하드코딩.
+    return ["test_dummy"]
 
 func return_to_title():
     init_run()
