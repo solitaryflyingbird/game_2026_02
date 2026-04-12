@@ -1,56 +1,51 @@
 extends Node
+
+# ============================================================
+# 카드 정의
+# ============================================================
+
+const CARDS = {
+    "atk_basic": {
+        "name": "기본 공격",
+        "type": "ATTACK",
+        "cost": 1,
+        "damage": 6,
+        "block": 0,
+        "desc": "적에게 6 데미지.",
+    },
+    "blk_basic": {
+        "name": "기본 방어",
+        "type": "BLOCK",
+        "cost": 1,
+        "damage": 0,
+        "block": 5,
+        "desc": "방어력 5 획득.",
+    },
+}
+
+const STARTING_DECK = [
+    "atk_basic", "atk_basic", "atk_basic", "atk_basic", "atk_basic",
+    "blk_basic", "blk_basic", "blk_basic", "blk_basic", "blk_basic",
+]
+
+# ============================================================
+# 런 초기 데이터
+# ============================================================
+
 const starting_data = {
-    "hp": 30,
-    "max_hp": 30,
+    "hp": 50,
+    "max_hp": 50,
     "floor": 1,
-    "dice": {
-        "attack": { "grade": 1, "grade_exp": 0 },
-        "block":  { "grade": 1, "grade_exp": 0 },
-        "boost":  { "grade": 1, "grade_exp": 0 },
-        "heal":   { "grade": 1, "grade_exp": 0 },
-    },
-    "phase": "title"
-}
-const GRADE_FACES = {
-    1: [1,1,1,1,2,2,2],
-    2: [1,1,1,2,2,2,2],
-    3: [2,2,2,2,3,3,3],
-    4: [3,3,3,3,2,2,2],
+    "deck": [],   # init_run 시 STARTING_DECK 복사
+    "phase": "title",
 }
 
-const ENEMIES = {
-    "scout_drone": {
-        "name": "정찰 드론",
-        "hp": 15,
-        "skills": [
-            { "type": "attack", "value": 3 },
-            { "type": "attack", "value": 5 },
-        ],
-    },
-    "assault_drone": {
-        "name": "강습 드론",
-        "hp": 20,
-        "skills": [
-            { "type": "attack", "value": 4 },
-            { "type": "attack", "value": 6 },
-        ],
-    },
-    "heavy_mech": {
-        "name": "중장갑 메카",
-        "hp": 30,
-        "skills": [
-            { "type": "attack", "value": 4 },
-            { "type": "attack", "value": 6 },
-            { "type": "attack", "value": 8 },
-        ],
-    },
-}
+# ============================================================
+# 헬퍼
+# ============================================================
 
-const FLOOR_ENCOUNTERS = {
-    1: ["scout_drone"],
-    2: ["scout_drone", "scout_drone"],
-    3: ["assault_drone"],
-    4: ["assault_drone", "scout_drone"],
-    5: ["heavy_mech"],
-    6: ["heavy_mech", "assault_drone"],
-}
+static func get_card(card_id: String) -> Dictionary:
+    if card_id in CARDS:
+        return CARDS[card_id]
+    push_warning("unknown card id: %s" % card_id)
+    return {}

@@ -126,7 +126,7 @@ offset_right = 520.0
 offset_bottom = 555.0
 text = "불러오기"
 
-[node name="settings_button" parent="run_ui/title_screen" instance=ExtResource("12_titlebtn")]
+[node name="settings_button" parent="run_ui/title_screen" unique_id=1132728964 instance=ExtResource("12_titlebtn")]
 layout_mode = 0
 offset_left = 160.0
 offset_top = 570.0
@@ -188,41 +188,13 @@ offset_right = 40.0
 offset_bottom = 40.0
 script = ExtResource("2_0xm2m")
 
-[node name="floor_label" type="Label" parent="run_ui/combat_screen" unique_id=856642668]
+[node name="deck_label" type="Label" parent="run_ui/combat_screen" unique_id=2008776941]
 layout_mode = 0
 offset_left = 80.0
-offset_top = 30.0
-offset_right = 300.0
-offset_bottom = 60.0
-text = "FLOOR 01"
-
-[node name="hp_label" type="Label" parent="run_ui/combat_screen" unique_id=1094837128]
-layout_mode = 0
-offset_left = 900.0
-offset_top = 30.0
+offset_top = 40.0
 offset_right = 1200.0
-offset_bottom = 60.0
-text = "HP 30/30"
-horizontal_alignment = 2
-
-[node name="stub_label" type="Label" parent="run_ui/combat_screen" unique_id=2137406332]
-layout_mode = 0
-offset_left = 400.0
-offset_top = 250.0
-offset_right = 880.0
-offset_bottom = 310.0
-text = "전투 진행 중...
-(실제 전투 UI가 여기에 들어감)"
-horizontal_alignment = 1
-
-[node name="stub_result" type="Label" parent="run_ui/combat_screen" unique_id=1199047105]
-layout_mode = 0
-offset_left = 400.0
-offset_top = 350.0
-offset_right = 880.0
-offset_bottom = 390.0
-text = "stub: HP -3 적용됨"
-horizontal_alignment = 1
+offset_bottom = 680.0
+text = "(전투 진입 시 덱 목록 표시)"
 
 [node name="reward_screen" type="Control" parent="run_ui" unique_id=564545111]
 layout_mode = 3
@@ -230,87 +202,22 @@ anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
 
-[node name="info_label" type="Label" parent="run_ui/reward_screen" unique_id=1095855314]
+[node name="reward_label" type="Label" parent="run_ui/reward_screen" unique_id=597603483]
 layout_mode = 0
-offset_left = 80.0
-offset_top = 40.0
-offset_right = 600.0
-offset_bottom = 70.0
-text = "FLOOR 01 CLEAR | HP 27/30"
-
-[node name="title_label" type="Label" parent="run_ui/reward_screen" unique_id=1679020373]
-layout_mode = 0
-offset_left = 80.0
-offset_top = 100.0
-offset_right = 400.0
-offset_bottom = 140.0
-text = "정비 보상 선택"
-
-[node name="upgrade_button" type="Button" parent="run_ui/reward_screen" unique_id=176069289]
-layout_mode = 0
-offset_left = 200.0
+offset_left = 400.0
 offset_top = 200.0
-offset_right = 500.0
-offset_bottom = 280.0
-text = "주사위 강화
-4종 중 택 1"
+offset_right = 880.0
+offset_bottom = 300.0
+text = "전투 승리"
+horizontal_alignment = 1
 
-[node name="heal_button" type="Button" parent="run_ui/reward_screen" unique_id=2000272492]
+[node name="next_floor_button" type="Button" parent="run_ui/reward_screen" unique_id=96345238]
 layout_mode = 0
-offset_left = 540.0
-offset_top = 200.0
-offset_right = 840.0
-offset_bottom = 280.0
-text = "체력 회복
-HP 전체 회복"
-
-[node name="maxhp_button" type="Button" parent="run_ui/reward_screen" unique_id=842068751]
-layout_mode = 0
-offset_left = 200.0
-offset_top = 320.0
-offset_right = 500.0
-offset_bottom = 400.0
-text = "최대HP 증가
-max_hp +3"
-
-[node name="dice_select_panel" type="Control" parent="run_ui/reward_screen" unique_id=2110627190]
-visible = false
-anchors_preset = 0
-offset_left = 200.0
-offset_top = 440.0
-offset_right = 840.0
-offset_bottom = 520.0
-
-[node name="attack_button" type="Button" parent="run_ui/reward_screen/dice_select_panel" unique_id=1321830099]
-layout_mode = 0
-offset_right = 140.0
-offset_bottom = 60.0
-text = "ATK
-등급 1"
-
-[node name="block_button" type="Button" parent="run_ui/reward_screen/dice_select_panel" unique_id=1555942042]
-layout_mode = 0
-offset_left = 160.0
-offset_right = 300.0
-offset_bottom = 60.0
-text = "BLK
-등급 1"
-
-[node name="boost_button" type="Button" parent="run_ui/reward_screen/dice_select_panel" unique_id=1726985886]
-layout_mode = 0
-offset_left = 320.0
-offset_right = 460.0
-offset_bottom = 60.0
-text = "BST
-등급 1"
-
-[node name="heal_dice_button" type="Button" parent="run_ui/reward_screen/dice_select_panel" unique_id=1252720877]
-layout_mode = 0
-offset_left = 480.0
-offset_right = 620.0
-offset_bottom = 60.0
-text = "HEL
-등급 1"
+offset_left = 490.0
+offset_top = 350.0
+offset_right = 790.0
+offset_bottom = 410.0
+text = "다음 층으로"
 
 [node name="result_screen" type="Control" parent="run_ui" unique_id=1953734017]
 layout_mode = 3

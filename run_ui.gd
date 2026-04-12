@@ -24,20 +24,8 @@ func _ready():
     # 전투 → 결과 수신
     $combat_screen.combat_finished.connect(RunManager._on_combat_finished)
 
-    # 보상 — 메인 3종
-    $reward_screen/heal_button.pressed.connect(RunManager.finish_reward_heal)
-    $reward_screen/maxhp_button.pressed.connect(RunManager.finish_reward_maxhp)
-    $reward_screen/upgrade_button.pressed.connect(_on_upgrade_button)
-
-    # 보상 — 강화 서브패널 4종
-    $reward_screen/dice_select_panel/attack_button.pressed.connect(
-        RunManager.finish_reward_upgrade.bind("attack"))
-    $reward_screen/dice_select_panel/block_button.pressed.connect(
-        RunManager.finish_reward_upgrade.bind("block"))
-    $reward_screen/dice_select_panel/boost_button.pressed.connect(
-        RunManager.finish_reward_upgrade.bind("boost"))
-    $reward_screen/dice_select_panel/heal_dice_button.pressed.connect(
-        RunManager.finish_reward_upgrade.bind("heal"))
+    # 보상 — 임시: "다음 층" 버튼만
+    $reward_screen/next_floor_button.pressed.connect(RunManager.advance_floor)
 
     # 결과
     $result_screen/title_button.pressed.connect(RunManager.return_to_title)
@@ -51,7 +39,6 @@ func _on_state_changed():
     show_phase(phase)
     update_labels()
 
-    # combat 화면이 보이면 전투 시작
     if phase == "combat":
         $combat_screen.begin_combat()
 
@@ -60,9 +47,6 @@ func show_phase(phase: String):
         screen.visible = false
     if phase in screens:
         screens[phase].visible = true
-    # 보상 화면 진입 시 서브패널 닫기
-    if phase != "reward":
-        $reward_screen/dice_select_panel.visible = false
 
 # --- 라벨 갱신 ---
 
@@ -74,52 +58,16 @@ func update_labels():
     # 플로어 화면
     $floor_screen/floor_label.text = "FLOOR %s" % floor_str
     $floor_screen/hp_label.text = "HP %s" % hp_str
-    _update_enemy_preview()
-
-    # 전투 화면
-    $combat_screen/floor_label.text = "FLOOR %s" % floor_str
-    $combat_screen/hp_label.text = "HP %s" % hp_str
-
-    # 보상 화면
-    $reward_screen/info_label.text = "FLOOR %s CLEAR | HP %s" % [floor_str, hp_str]
-    _update_dice_buttons()
+    $floor_screen/enemy_label.text = "덱: %d장" % d["deck"].size()
 
     # 결과 화면
     match d["phase"]:
         "victory":
-            $result_screen/result_label.text = "임무 완료\n폐기 철회. 은퇴 승인."
+            $result_screen/result_label.text = "임무 완료\n낙원 도달."
         "lose":
-            $result_screen/result_label.text = "대파\n회수 불가. 폐기 집행."
+            $result_screen/result_label.text = "기동 정지\n임무 실패."
 
-# --- 보상: 강화 서브패널 ---
-
-func _on_upgrade_button():
-    $reward_screen/dice_select_panel.visible = true
-    _update_dice_buttons()
-
-func _update_dice_buttons():
-    var dice = RunManager.run_data["dice"]
-    var panel = $reward_screen/dice_select_panel
-    var mapping = {
-        "attack": panel.get_node("attack_button"),
-        "block": panel.get_node("block_button"),
-        "boost": panel.get_node("boost_button"),
-        "heal": panel.get_node("heal_dice_button"),
-    }
-    var labels = { "attack": "ATK", "block": "BLK", "boost": "BST", "heal": "HEL" }
-
-    for type in mapping:
-        var btn = mapping[type]
-        var grade = dice[type]["grade"]
-        var exp = dice[type]["grade_exp"]
-        if grade >= len(GameData.GRADE_FACES):
-            btn.text = "%s\n등급 MAX" % labels[type]
-            btn.disabled = true
-        else:
-            btn.text = "%s\n등급 %d (%d/%d)" % [labels[type], grade, exp, grade]
-            btn.disabled = false
-
-# --- 적 프리뷰 ---
+# --- 타이틀 버튼 ---
 
 func _on_load_pressed():
     print("[title] 불러오기: 아직 구현되지 않음")
@@ -129,15 +77,3 @@ func _on_settings_pressed():
 
 func _on_quit_pressed():
     get_tree().quit()
-
-func _update_enemy_preview():
-    var floor_num = RunManager.run_data["floor"]
-    if floor_num not in GameData.FLOOR_ENCOUNTERS:
-        $floor_screen/enemy_label.text = ""
-        return
-    var encounter = GameData.FLOOR_ENCOUNTERS[floor_num]
-    var parts = []
-    for key in encounter:
-        var enemy = GameData.ENEMIES[key]
-        parts.append("%s (HP %d)" % [enemy["name"], enemy["hp"]])
-    $floor_screen/enemy_label.text = "적 프리뷰: %s" % " / ".join(parts)
