@@ -15,6 +15,7 @@ func _ready():
     # 타이틀
     $title_screen/start_button.pressed.connect(RunManager.start_run)
     $title_screen/load_button.pressed.connect(_on_load_pressed)
+    $title_screen/settings_button.pressed.connect(_on_settings_pressed)
     $title_screen/quit_button.pressed.connect(_on_quit_pressed)
 
     # 플로어
@@ -122,6 +123,9 @@ func _update_dice_buttons():
 
 func _on_load_pressed():
     print("[title] 불러오기: 아직 구현되지 않음")
+
+func _on_settings_pressed():
+    print("[title] 설정: 아직 구현되지 않음")
 
 func _on_quit_pressed():
     get_tree().quit()
