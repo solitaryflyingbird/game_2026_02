@@ -131,20 +131,32 @@ func _build_player_area():
     player_area.size = Vector2(200, 300)
     add_child(player_area)
 
-    # AnimatedSprite2D로 idle 4프레임
+    # AnimatedSprite2D — idle + attack
     player_sprite = AnimatedSprite2D.new()
     var frames = SpriteFrames.new()
+
+    # idle (4프레임, 루프)
     frames.add_animation("idle")
     frames.set_animation_speed("idle", 4)
     frames.set_animation_loop("idle", true)
     for i in range(4):
-        var tex = load("res://에셋/배틀 리소스/주인공/frame_%d.png" % i)
+        var tex = load("res://에셋/배틀 리소스/주인공/idle/frame_%d.png" % i)
         frames.add_frame("idle", tex)
+
+    # attack (5프레임, 루프 안 함)
+    frames.add_animation("attack")
+    frames.set_animation_speed("attack", 10)
+    frames.set_animation_loop("attack", false)
+    for i in range(5):
+        var tex = load("res://에셋/배틀 리소스/주인공/공격모션/frame_%d.png" % i)
+        frames.add_frame("attack", tex)
+
     player_sprite.sprite_frames = frames
     player_sprite.animation = "idle"
     player_sprite.autoplay = "idle"
     player_sprite.position = Vector2(100, 100)
     player_sprite.scale = Vector2(0.38, 0.38)
+    player_sprite.animation_finished.connect(_on_player_anim_finished)
     player_area.add_child(player_sprite)
 
     # HP 바 (적과 동일한 custom_minimum_size 방식)
@@ -420,10 +432,19 @@ func _execute_card(hand_index: int, target_index: int):
     if stats["damage"] > 0 and target_index >= 0:
         var ename = BattleManager.enemies[target_index]["name"]
         log_label.text = "%s → %s에게 %d 데미지" % [stats["name"], ename, stats["damage"]]
+        # 공격 모션 재생
+        _play_attack_anim()
     elif stats["block"] > 0:
         log_label.text = "%s → 방어 %d" % [stats["name"], stats["block"]]
 
     _refresh_ui()
+
+func _play_attack_anim():
+    player_sprite.play("attack")
+
+func _on_player_anim_finished():
+    # 공격 모션 끝나면 idle로 복귀
+    player_sprite.play("idle")
 
 func _on_end_turn():
     if waiting_for_target:
