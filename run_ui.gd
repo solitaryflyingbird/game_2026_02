@@ -5,6 +5,7 @@ extends Node2D
     "floor": $floor_screen,
     "combat": $combat_screen,
     "reward": $reward_screen,
+    "rest": $rest_screen,
     "lose": $result_screen,
     "victory": $result_screen,
 }
@@ -24,8 +25,12 @@ func _ready():
     # 전투 → 결과 수신
     $combat_screen.combat_finished.connect(RunManager._on_combat_finished)
 
-    # 보상 — 임시: "다음 층" 버튼만
+    # 보상 — "다음 층" 버튼
     $reward_screen/next_floor_button.pressed.connect(RunManager.advance_floor)
+
+    # 거점
+    $rest_screen/heal_hp_button.pressed.connect(RunManager.rest_heal_hp)
+    $rest_screen/skip_button.pressed.connect(RunManager.advance_floor)
 
     # 결과
     $result_screen/title_button.pressed.connect(RunManager.return_to_title)
@@ -52,13 +57,31 @@ func show_phase(phase: String):
 
 func update_labels():
     var d = RunManager.run_data
-    var floor_str = "%02d" % d["floor"]
+    var floor_idx = d["floor"]
+    var floor_display = floor_idx + 1
     var hp_str = "%d / %d" % [d["hp"], d["max_hp"]]
 
     # 플로어 화면
-    $floor_screen/floor_label.text = "FLOOR %s" % floor_str
+    $floor_screen/floor_label.text = "FLOOR %02d" % floor_display
     $floor_screen/hp_label.text = "HP %s" % hp_str
-    $floor_screen/enemy_label.text = "덱: %d장" % d["deck"].size()
+
+    # 맵 노드 정보 표시
+    var node = RunManager._get_current_node()
+    var node_type = node.get("type", "?")
+    var next_info = ""
+    match node_type:
+        "combat":
+            var enemies = node.get("enemies", [])
+            next_info = "전투: %s" % ", ".join(enemies)
+        "boss":
+            var enemies = node.get("enemies", [])
+            next_info = "보스: %s" % ", ".join(enemies)
+        "rest":
+            next_info = "거점 (수습소)"
+    $floor_screen/enemy_label.text = next_info
+
+    # 거점 화면
+    $rest_screen/rest_info.text = "HP %s  |  덱 %d장" % [hp_str, d["deck"].size()]
 
     # 결과 화면
     match d["phase"]:

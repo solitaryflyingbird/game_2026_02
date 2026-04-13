@@ -219,6 +219,45 @@ offset_right = 790.0
 offset_bottom = 410.0
 text = "다음 층으로"
 
+[node name="rest_screen" type="Control" parent="run_ui" unique_id=625271269]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="rest_label" type="Label" parent="run_ui/rest_screen" unique_id=611987891]
+layout_mode = 0
+offset_left = 400.0
+offset_top = 150.0
+offset_right = 880.0
+offset_bottom = 250.0
+text = "거점 — 수습소"
+horizontal_alignment = 1
+
+[node name="rest_info" type="Label" parent="run_ui/rest_screen" unique_id=1865893800]
+layout_mode = 0
+offset_left = 400.0
+offset_top = 260.0
+offset_right = 880.0
+offset_bottom = 320.0
+horizontal_alignment = 1
+
+[node name="heal_hp_button" type="Button" parent="run_ui/rest_screen" unique_id=372868558]
+layout_mode = 0
+offset_left = 340.0
+offset_top = 350.0
+offset_right = 640.0
+offset_bottom = 410.0
+text = "HP 임시수리 (+15)"
+
+[node name="skip_button" type="Button" parent="run_ui/rest_screen" unique_id=1786446031]
+layout_mode = 0
+offset_left = 660.0
+offset_top = 350.0
+offset_right = 940.0
+offset_bottom = 410.0
+text = "건너뛰기"
+
 [node name="result_screen" type="Control" parent="run_ui" unique_id=1953734017]
 layout_mode = 3
 anchors_preset = 0
