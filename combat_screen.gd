@@ -2,53 +2,171 @@ extends Control
 
 signal combat_finished(result: Dictionary)
 
-# --- UI 노드 (코드에서 생성) ---
-var status_label: Label
-var enemy_container: VBoxContainer
+# ============================================================
+# UI 노드 (코드에서 생성 — 안1 클래식 좌우 대치 레이아웃)
+# ============================================================
+
+# 상단 HUD
+var hud_panel: Panel
+var hud_hp_bar: ProgressBar
+var hud_hp_label: Label
+var hud_energy_label: Label
+var hud_turn_label: Label
+var hud_deck_label: Label
+
+# 주인공 영역 (좌측)
+var player_area: Panel
+var player_hp_bar: ProgressBar
+var player_hp_label: Label
+var player_block_label: Label
+
+# 적 영역 (우측)
+var enemy_container: HBoxContainer
+
+# 핸드 (하단)
 var hand_container: HBoxContainer
+
+# 턴 종료 버튼
 var end_turn_button: Button
+
+# 로그
 var log_label: Label
 
-var enemy_labels: Array = []
+# 상태
+var enemy_panels: Array = []
 var card_buttons: Array = []
 var waiting_for_target: bool = false
 var pending_card_index: int = -1
 
 func _ready():
-    # 상태 표시
-    status_label = Label.new()
-    status_label.position = Vector2(80, 30)
-    add_child(status_label)
+    # 기존 deck_label 숨기기
+    if has_node("deck_label"):
+        $deck_label.visible = false
 
-    # 적 표시
-    enemy_container = VBoxContainer.new()
-    enemy_container.position = Vector2(80, 80)
-    enemy_container.add_theme_constant_override("separation", 8)
+    _build_hud()
+    _build_player_area()
+    _build_enemy_area()
+    _build_hand_area()
+    _build_end_turn()
+    _build_log()
+
+# ============================================================
+# UI 빌드
+# ============================================================
+
+func _build_hud():
+    hud_panel = Panel.new()
+    hud_panel.position = Vector2(0, 0)
+    hud_panel.size = Vector2(1280, 56)
+    add_child(hud_panel)
+
+    # HP 바
+    hud_hp_bar = ProgressBar.new()
+    hud_hp_bar.position = Vector2(20, 14)
+    hud_hp_bar.size = Vector2(280, 28)
+    hud_hp_bar.max_value = 50
+    hud_hp_bar.value = 50
+    hud_hp_bar.show_percentage = false
+    hud_panel.add_child(hud_hp_bar)
+
+    hud_hp_label = Label.new()
+    hud_hp_label.position = Vector2(24, 16)
+    hud_hp_label.size = Vector2(272, 28)
+    hud_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hud_hp_label.add_theme_font_size_override("font_size", 14)
+    hud_panel.add_child(hud_hp_label)
+
+    # 에너지
+    hud_energy_label = Label.new()
+    hud_energy_label.position = Vector2(320, 16)
+    hud_energy_label.add_theme_font_size_override("font_size", 16)
+    hud_panel.add_child(hud_energy_label)
+
+    # 턴
+    hud_turn_label = Label.new()
+    hud_turn_label.position = Vector2(580, 16)
+    hud_turn_label.size = Vector2(120, 28)
+    hud_turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hud_turn_label.add_theme_font_size_override("font_size", 14)
+    hud_panel.add_child(hud_turn_label)
+
+    # 덱/버림 카운터
+    hud_deck_label = Label.new()
+    hud_deck_label.position = Vector2(1000, 16)
+    hud_deck_label.size = Vector2(260, 28)
+    hud_deck_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    hud_deck_label.add_theme_font_size_override("font_size", 13)
+    hud_panel.add_child(hud_deck_label)
+
+func _build_player_area():
+    # 주인공 영역 (좌측)
+    player_area = Panel.new()
+    player_area.position = Vector2(60, 140)
+    player_area.size = Vector2(180, 260)
+    add_child(player_area)
+
+    var placeholder = Label.new()
+    placeholder.text = "주인공"
+    placeholder.position = Vector2(0, 0)
+    placeholder.size = Vector2(180, 200)
+    placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    player_area.add_child(placeholder)
+
+    # 주인공 하단 HP 바
+    player_hp_bar = ProgressBar.new()
+    player_hp_bar.position = Vector2(0, 205)
+    player_hp_bar.size = Vector2(180, 18)
+    player_hp_bar.max_value = 50
+    player_hp_bar.value = 50
+    player_hp_bar.show_percentage = false
+    player_area.add_child(player_hp_bar)
+
+    player_hp_label = Label.new()
+    player_hp_label.position = Vector2(0, 205)
+    player_hp_label.size = Vector2(180, 18)
+    player_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    player_hp_label.add_theme_font_size_override("font_size", 11)
+    player_area.add_child(player_hp_label)
+
+    player_block_label = Label.new()
+    player_block_label.position = Vector2(0, 228)
+    player_block_label.size = Vector2(180, 24)
+    player_block_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    player_block_label.add_theme_font_size_override("font_size", 13)
+    player_area.add_child(player_block_label)
+
+func _build_enemy_area():
+    enemy_container = HBoxContainer.new()
+    enemy_container.position = Vector2(700, 120)
+    enemy_container.add_theme_constant_override("separation", 24)
     add_child(enemy_container)
 
-    # 핸드
+func _build_hand_area():
     hand_container = HBoxContainer.new()
-    hand_container.position = Vector2(80, 480)
-    hand_container.add_theme_constant_override("separation", 12)
+    hand_container.position = Vector2(200, 580)
+    hand_container.add_theme_constant_override("separation", 14)
     add_child(hand_container)
 
-    # 턴 종료 버튼
+func _build_end_turn():
     end_turn_button = Button.new()
     end_turn_button.text = "턴 종료"
-    end_turn_button.position = Vector2(1050, 500)
+    end_turn_button.position = Vector2(1080, 460)
     end_turn_button.custom_minimum_size = Vector2(140, 50)
     end_turn_button.pressed.connect(_on_end_turn)
     add_child(end_turn_button)
 
-    # 로그
+func _build_log():
     log_label = Label.new()
-    log_label.position = Vector2(80, 400)
-    log_label.add_theme_font_size_override("font_size", 14)
+    log_label.position = Vector2(300, 470)
+    log_label.size = Vector2(500, 60)
+    log_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    log_label.add_theme_font_size_override("font_size", 15)
     add_child(log_label)
 
-    # 기존 deck_label 숨기기
-    if has_node("deck_label"):
-        $deck_label.visible = false
+# ============================================================
+# 전투 시작
+# ============================================================
 
 func begin_combat():
     waiting_for_target = false
@@ -62,41 +180,91 @@ func begin_combat():
 # ============================================================
 
 func _refresh_ui():
-    _refresh_status()
+    _refresh_hud()
+    _refresh_player()
     _refresh_enemies()
     _refresh_hand()
     _check_combat_end()
 
-func _refresh_status():
+func _refresh_hud():
     var p = BattleManager.player
-    status_label.text = "턴 %d  |  HP %d/%d  |  방어 %d  |  에너지 %d/%d  |  드로우 %d  |  버림 %d" % [
-        BattleManager.turn,
-        p["hp"], p["max_hp"], p["block"],
-        p["energy"], p["energy_max"],
+    # HP 바
+    hud_hp_bar.max_value = p["max_hp"]
+    hud_hp_bar.value = p["hp"]
+    hud_hp_label.text = "HP %d / %d" % [p["hp"], p["max_hp"]]
+    # 에너지
+    hud_energy_label.text = "에너지 %d / %d" % [p["energy"], p["energy_max"]]
+    # 턴
+    hud_turn_label.text = "TURN %d" % BattleManager.turn
+    # 덱/버림
+    hud_deck_label.text = "덱 %d | 버림 %d" % [
         BattleManager.draw_pile.size(),
-        BattleManager.discard_pile.size(),
-    ]
+        BattleManager.discard_pile.size()]
+
+func _refresh_player():
+    var p = BattleManager.player
+    player_hp_bar.max_value = p["max_hp"]
+    player_hp_bar.value = p["hp"]
+    player_hp_label.text = "HP %d / %d" % [p["hp"], p["max_hp"]]
+    if p["block"] > 0:
+        player_block_label.text = "방어 %d" % p["block"]
+    else:
+        player_block_label.text = ""
 
 func _refresh_enemies():
-    for lbl in enemy_labels:
-        lbl.queue_free()
-    enemy_labels.clear()
+    for panel in enemy_panels:
+        panel.queue_free()
+    enemy_panels.clear()
 
     for i in range(BattleManager.enemies.size()):
         var e = BattleManager.enemies[i]
-        var btn = Button.new()
-        btn.custom_minimum_size = Vector2(400, 50)
-        if e["hp"] <= 0:
-            btn.text = "%s  [사망]" % e["name"]
-            btn.disabled = true
+
+        var panel = VBoxContainer.new()
+        panel.custom_minimum_size = Vector2(150, 220)
+        panel.add_theme_constant_override("separation", 6)
+
+        # 의도
+        var intent_label = Label.new()
+        intent_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        intent_label.add_theme_font_size_override("font_size", 13)
+        if e["hp"] > 0:
+            intent_label.text = "[%s]" % _intent_to_string(e["intent"])
         else:
-            var intent_str = _intent_to_string(e["intent"])
-            btn.text = "%s  HP %d/%d  방어 %d  [예고: %s]" % [
-                e["name"], e["hp"], e["max_hp"], e["block"], intent_str]
-            btn.disabled = not waiting_for_target
-            btn.pressed.connect(_on_enemy_clicked.bind(i))
-        enemy_container.add_child(btn)
-        enemy_labels.append(btn)
+            intent_label.text = ""
+        panel.add_child(intent_label)
+
+        # 적 스프라이트 자리 (버튼으로 — 클릭 가능)
+        var sprite_btn = Button.new()
+        sprite_btn.custom_minimum_size = Vector2(140, 150)
+        if e["hp"] <= 0:
+            sprite_btn.text = "%s\n[사망]" % e["name"]
+            sprite_btn.disabled = true
+        else:
+            sprite_btn.text = e["name"]
+            sprite_btn.disabled = not waiting_for_target
+            sprite_btn.pressed.connect(_on_enemy_clicked.bind(i))
+        panel.add_child(sprite_btn)
+
+        # HP 바
+        var hp_bar = ProgressBar.new()
+        hp_bar.custom_minimum_size = Vector2(140, 12)
+        hp_bar.max_value = e["max_hp"]
+        hp_bar.value = max(0, e["hp"])
+        hp_bar.show_percentage = false
+        panel.add_child(hp_bar)
+
+        # HP 텍스트 + 블록
+        var hp_label = Label.new()
+        hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        hp_label.add_theme_font_size_override("font_size", 12)
+        var hp_text = "HP %d/%d" % [max(0, e["hp"]), e["max_hp"]]
+        if e["block"] > 0:
+            hp_text += " | 방어 %d" % e["block"]
+        hp_label.text = hp_text
+        panel.add_child(hp_label)
+
+        enemy_container.add_child(panel)
+        enemy_panels.append(panel)
 
 func _refresh_hand():
     for btn in card_buttons:
@@ -106,18 +274,19 @@ func _refresh_hand():
     for i in range(BattleManager.hand.size()):
         var card_inst = BattleManager.hand[i]
         var stats = GameData.get_card_stats(card_inst)
-        var btn = Button.new()
-        btn.custom_minimum_size = Vector2(140, 80)
 
-        var label_parts := []
-        label_parts.append("[%s]" % stats["type"])
-        label_parts.append(stats["name"])
-        label_parts.append("코스트 %d" % stats["cost"])
+        var btn = Button.new()
+        btn.custom_minimum_size = Vector2(130, 160)
+
+        # 카드 텍스트
+        var lines := []
+        lines.append(stats["name"])
+        lines.append("코스트 %d" % stats["cost"])
         if stats["damage"] > 0:
-            label_parts.append("데미지 %d" % stats["damage"])
+            lines.append("DMG %d" % stats["damage"])
         if stats["block"] > 0:
-            label_parts.append("방어 %d" % stats["block"])
-        btn.text = "\n".join(label_parts)
+            lines.append("BLK %d" % stats["block"])
+        btn.text = "\n".join(lines)
 
         var can_play = BattleManager.can_play_card(i)
         btn.disabled = not can_play or waiting_for_target
@@ -150,7 +319,6 @@ func _on_card_clicked(hand_index: int):
             _refresh_hand()
         return
 
-    # BLOCK 등 자기 대상 카드
     _execute_card(hand_index, -1)
 
 func _on_enemy_clicked(enemy_index: int):
@@ -171,12 +339,11 @@ func _execute_card(hand_index: int, target_index: int):
 
     BattleManager.play_card(hand_index, target_index)
 
-    # 로그
     if stats["damage"] > 0 and target_index >= 0:
         var ename = BattleManager.enemies[target_index]["name"]
-        log_label.text = "%s 사용 → %s에게 %d 데미지" % [stats["name"], ename, stats["damage"]]
+        log_label.text = "%s → %s에게 %d 데미지" % [stats["name"], ename, stats["damage"]]
     elif stats["block"] > 0:
-        log_label.text = "%s 사용 → 방어 %d 획득" % [stats["name"], stats["block"]]
+        log_label.text = "%s → 방어 %d" % [stats["name"], stats["block"]]
 
     _refresh_ui()
 
@@ -187,11 +354,10 @@ func _on_end_turn():
     BattleManager.end_turn()
     BattleManager.enemy_turn()
 
-    # 적 턴 로그
     var log_lines := PackedStringArray()
     for e in BattleManager.enemies:
         if e["hp"] > 0 and e["intent"].get("kind") == "attack":
-            log_lines.append("%s의 공격 → %d 데미지" % [e["name"], e["intent"]["value"]])
+            log_lines.append("%s → %d 데미지" % [e["name"], e["intent"]["value"]])
     if log_lines.size() > 0:
         log_label.text = "\n".join(log_lines)
 
@@ -202,7 +368,7 @@ func _on_end_turn():
     _refresh_ui()
 
 # ============================================================
-# 전투 종료 확인
+# 전투 종료
 # ============================================================
 
 func _check_combat_end() -> bool:
@@ -210,13 +376,12 @@ func _check_combat_end() -> bool:
     if result == "":
         return false
 
-    # UI 정리
     for btn in card_buttons:
         btn.queue_free()
     card_buttons.clear()
-    for lbl in enemy_labels:
-        lbl.queue_free()
-    enemy_labels.clear()
+    for panel in enemy_panels:
+        panel.queue_free()
+    enemy_panels.clear()
     end_turn_button.visible = false
 
     var r = BattleManager.get_result()
