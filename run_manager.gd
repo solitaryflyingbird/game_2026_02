@@ -17,24 +17,11 @@ func init_run():
 # --- 맵 생성 (하드코딩 분기 맵) ---
 
 func _generate_map() -> Array:
-    # row 0: [0:전투]  [1:전투]
-    #            ↘   ↙   ↘
-    # row 1:  [2:엘리트] [3:전투]
-    #             ↘       ↙
-    # row 2:     [4:거점]
-    #             ↙    ↘
-    # row 3:  [5:전투] [6:전투]
-    #             ↘    ↙
-    # row 4:    [7:보스]
+    # 테스트용 최소 맵: 일반 → 정비 → 보스
     return [
-        {"id": 0, "row": 0, "col": 0, "type": "combat", "enemies": ["test_dummy"], "connections": [2, 3], "visited": false},
-        {"id": 1, "row": 0, "col": 1, "type": "combat", "enemies": ["test_dummy"], "connections": [3], "visited": false},
-        {"id": 2, "row": 1, "col": 0, "type": "elite", "enemies": ["test_dummy"], "connections": [4], "visited": false},
-        {"id": 3, "row": 1, "col": 1, "type": "combat", "enemies": ["test_dummy"], "connections": [4, 5], "visited": false},
-        {"id": 4, "row": 2, "col": 0, "type": "rest", "enemies": [], "connections": [5, 6], "visited": false},
-        {"id": 5, "row": 3, "col": 0, "type": "combat", "enemies": ["test_dummy"], "connections": [7], "visited": false},
-        {"id": 6, "row": 3, "col": 1, "type": "combat", "enemies": ["test_dummy"], "connections": [7], "visited": false},
-        {"id": 7, "row": 4, "col": 0, "type": "boss", "enemies": ["test_dummy"], "connections": [], "visited": false},
+        {"id": 0, "row": 0, "col": 0, "type": "combat", "enemies": ["test_dummy"], "connections": [1], "visited": false},
+        {"id": 1, "row": 1, "col": 0, "type": "rest", "enemies": [], "connections": [2], "visited": false},
+        {"id": 2, "row": 2, "col": 0, "type": "boss", "enemies": ["test_dummy"], "connections": [], "visited": false},
     ]
 
 func get_node_by_id(node_id: int) -> Dictionary:

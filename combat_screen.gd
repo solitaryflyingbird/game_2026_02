@@ -36,6 +36,9 @@ var end_turn_button: Button
 # 로그
 var log_label: Label
 
+# 배경
+var bg_texture: TextureRect
+
 # 상태
 var enemy_panels: Array = []
 var card_buttons: Array = []
@@ -47,6 +50,7 @@ func _ready():
     if has_node("deck_label"):
         $deck_label.visible = false
 
+    _build_bg()
     _build_hud()
     _build_player_area()
     _build_enemy_area()
@@ -57,6 +61,24 @@ func _ready():
 # ============================================================
 # UI 빌드
 # ============================================================
+
+func _build_bg():
+    bg_texture = TextureRect.new()
+    bg_texture.position = Vector2(0, 0)
+    bg_texture.size = Vector2(1280, 720)
+    bg_texture.expand_mode = 1
+    bg_texture.stretch_mode = 6  # STRETCH_KEEP_ASPECT_COVERED
+    bg_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(bg_texture)
+
+func _set_bg_for_node():
+    var node = RunManager.get_current_node()
+    var node_type = node.get("type", "combat")
+    match node_type:
+        "boss":
+            bg_texture.texture = load("res://에셋/배틀 리소스/배경/배경2.png")
+        _:
+            bg_texture.texture = load("res://에셋/배틀 리소스/배경/배경1.png")
 
 func _build_hud():
     hud_panel = Panel.new()
@@ -191,6 +213,7 @@ func begin_combat():
     pending_card_index = -1
     log_label.text = ""
     end_turn_button.visible = true
+    _set_bg_for_node()
     _refresh_ui()
 
 # ============================================================
