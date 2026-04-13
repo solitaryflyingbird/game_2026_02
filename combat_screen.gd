@@ -15,10 +15,14 @@ var hud_turn_label: Label
 var hud_deck_label: Label
 
 # 주인공 영역 (좌측)
-var player_area: Panel
+var player_area: Control
+var player_sprite: AnimatedSprite2D
 var player_hp_bar: ProgressBar
 var player_hp_label: Label
 var player_block_label: Label
+
+# 적 스프라이트 텍스처
+var enemy_textures: Array = []
 
 # 적 영역 (우측)
 var enemy_container: HBoxContainer
@@ -99,48 +103,62 @@ func _build_hud():
     hud_panel.add_child(hud_deck_label)
 
 func _build_player_area():
-    # 주인공 영역 (좌측)
-    player_area = Panel.new()
-    player_area.position = Vector2(60, 140)
-    player_area.size = Vector2(180, 260)
+    # 주인공 영역 (좌측) — Panel 없이 직접 배치
+    player_area = Control.new()
+    player_area.position = Vector2(40, 120)
+    player_area.size = Vector2(200, 300)
     add_child(player_area)
 
-    var placeholder = Label.new()
-    placeholder.text = "주인공"
-    placeholder.position = Vector2(0, 0)
-    placeholder.size = Vector2(180, 200)
-    placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    player_area.add_child(placeholder)
+    # AnimatedSprite2D로 idle 4프레임
+    player_sprite = AnimatedSprite2D.new()
+    var frames = SpriteFrames.new()
+    frames.add_animation("idle")
+    frames.set_animation_speed("idle", 4)
+    frames.set_animation_loop("idle", true)
+    for i in range(4):
+        var tex = load("res://에셋/배틀 리소스/주인공/frame_%d.png" % i)
+        frames.add_frame("idle", tex)
+    player_sprite.sprite_frames = frames
+    player_sprite.animation = "idle"
+    player_sprite.autoplay = "idle"
+    player_sprite.position = Vector2(100, 100)
+    player_sprite.scale = Vector2(0.38, 0.38)
+    player_area.add_child(player_sprite)
 
-    # 주인공 하단 HP 바
+    # HP 바 (적과 동일한 custom_minimum_size 방식)
+    var hp_container = VBoxContainer.new()
+    hp_container.position = Vector2(30, 210)
+    hp_container.add_theme_constant_override("separation", 4)
+    player_area.add_child(hp_container)
+
     player_hp_bar = ProgressBar.new()
-    player_hp_bar.position = Vector2(0, 205)
-    player_hp_bar.size = Vector2(180, 18)
+    player_hp_bar.custom_minimum_size = Vector2(140, 12)
     player_hp_bar.max_value = 50
     player_hp_bar.value = 50
     player_hp_bar.show_percentage = false
-    player_area.add_child(player_hp_bar)
+    hp_container.add_child(player_hp_bar)
 
     player_hp_label = Label.new()
-    player_hp_label.position = Vector2(0, 205)
-    player_hp_label.size = Vector2(180, 18)
     player_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    player_hp_label.add_theme_font_size_override("font_size", 11)
-    player_area.add_child(player_hp_label)
+    player_hp_label.add_theme_font_size_override("font_size", 12)
+    hp_container.add_child(player_hp_label)
 
     player_block_label = Label.new()
-    player_block_label.position = Vector2(0, 228)
-    player_block_label.size = Vector2(180, 24)
     player_block_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    player_block_label.add_theme_font_size_override("font_size", 13)
-    player_area.add_child(player_block_label)
+    player_block_label.add_theme_font_size_override("font_size", 12)
+    hp_container.add_child(player_block_label)
 
 func _build_enemy_area():
     enemy_container = HBoxContainer.new()
-    enemy_container.position = Vector2(700, 120)
+    enemy_container.position = Vector2(650, 120)
     enemy_container.add_theme_constant_override("separation", 24)
     add_child(enemy_container)
+
+    # 적 텍스처 로드
+    enemy_textures = [
+        load("res://에셋/배틀 리소스/예시 적/1.png"),
+        load("res://에셋/배틀 리소스/예시 적/2.png"),
+    ]
 
 func _build_hand_area():
     hand_container = HBoxContainer.new()
@@ -233,17 +251,44 @@ func _refresh_enemies():
             intent_label.text = ""
         panel.add_child(intent_label)
 
-        # 적 스프라이트 자리 (버튼으로 — 클릭 가능)
-        var sprite_btn = Button.new()
-        sprite_btn.custom_minimum_size = Vector2(140, 150)
+        # 적 스프라이트 + 클릭 영역
+        var sprite_container = Control.new()
+        sprite_container.custom_minimum_size = Vector2(180, 120)
+
+        # 스프라이트 이미지
+        var tex_rect = TextureRect.new()
+        if enemy_textures.size() > 0:
+            tex_rect.texture = enemy_textures[0]
+        tex_rect.expand_mode = 1
+        tex_rect.stretch_mode = 5
+        tex_rect.size = Vector2(180, 112)
         if e["hp"] <= 0:
-            sprite_btn.text = "%s\n[사망]" % e["name"]
+            tex_rect.modulate = Color(0.3, 0.3, 0.3, 0.5)
+        sprite_container.add_child(tex_rect)
+
+        # 클릭 가능 투명 버튼 (스프라이트 위에)
+        var sprite_btn = Button.new()
+        sprite_btn.flat = true
+        sprite_btn.size = Vector2(180, 112)
+        sprite_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+        if e["hp"] <= 0:
             sprite_btn.disabled = true
         else:
-            sprite_btn.text = e["name"]
             sprite_btn.disabled = not waiting_for_target
             sprite_btn.pressed.connect(_on_enemy_clicked.bind(i))
-        panel.add_child(sprite_btn)
+        sprite_container.add_child(sprite_btn)
+
+        # 사망 라벨
+        if e["hp"] <= 0:
+            var dead_label = Label.new()
+            dead_label.text = "사망"
+            dead_label.size = Vector2(180, 112)
+            dead_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            dead_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+            dead_label.add_theme_font_size_override("font_size", 20)
+            sprite_container.add_child(dead_label)
+
+        panel.add_child(sprite_container)
 
         # HP 바
         var hp_bar = ProgressBar.new()
@@ -302,6 +347,16 @@ func _refresh_hand():
 
 func _on_card_clicked(hand_index: int):
     if waiting_for_target:
+        pending_card_index = hand_index
+        var stats = GameData.get_card_stats(BattleManager.hand[hand_index])
+        if stats["type"] != "ATTACK":
+            waiting_for_target = false
+            pending_card_index = -1
+            log_label.text = ""
+            _execute_card(hand_index, -1)
+        else:
+            log_label.text = "공격 대상을 선택하세요"
+            _refresh_hand()
         return
 
     var card_inst = BattleManager.hand[hand_index]
