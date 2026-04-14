@@ -108,12 +108,10 @@ func _on_map_node_selected(node_id: int):
 # --- 보상/거점 → 맵 복귀 ---
 
 func _on_return_to_map():
-    RunManager.run_data["phase"] = "map"
-    RunManager.state_changed.emit()
+    RunManager.return_to_map()
 
 func _on_rest_skip():
-    RunManager.run_data["phase"] = "map"
-    RunManager.state_changed.emit()
+    RunManager.return_to_map()
 
 # --- 라벨 갱신 ---
 

@@ -106,6 +106,10 @@ func start_run():
     run_data["phase"] = "map"
     state_changed.emit()
 
+func return_to_map():
+    run_data["phase"] = "map"
+    state_changed.emit()
+
 func return_to_title():
     init_run()
     run_data["phase"] = "title"
