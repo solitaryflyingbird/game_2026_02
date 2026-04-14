@@ -1,6 +1,13 @@
 extends Node
 
 # ============================================================
+# 시그널
+# ============================================================
+
+signal turn_ended(enemy_actions: Array)
+signal combat_over(result: Dictionary)
+
+# ============================================================
 # 전투 상태
 # ============================================================
 
@@ -12,12 +19,15 @@ var exhaust_pile: Array = []
 var player := {}
 var enemies: Array = []
 var turn: int = 0
+var node_type: String = "combat"
 
 # ============================================================
 # 전투 시작 / 종료
 # ============================================================
 
-func start_combat(deck: Array, hp: int, max_hp: int, enemy_ids: Array) -> void:
+func start_combat(deck: Array, hp: int, max_hp: int, enemy_ids: Array, p_node_type: String = "combat") -> void:
+    node_type = p_node_type
+
     # 덱 deep copy
     draw_pile = []
     for card_inst in deck:
@@ -51,6 +61,7 @@ func start_combat(deck: Array, hp: int, max_hp: int, enemy_ids: Array) -> void:
         })
 
     turn = 0
+    start_turn()
 
 func get_result() -> Dictionary:
     return {"outcome": "win" if _all_enemies_dead() else "lose", "hp": player["hp"]}
@@ -68,6 +79,16 @@ func start_turn() -> void:
     player["energy"] = player["energy_max"]
     draw(5)
     _decide_intents()
+
+func execute_end_turn() -> void:
+    end_turn()
+    var actions = _collect_enemy_actions()
+    enemy_turn()
+    turn_ended.emit(actions)
+    if is_combat_over() != "":
+        combat_over.emit(get_result())
+    else:
+        start_turn()
 
 func end_turn() -> void:
     discard_hand()
@@ -88,6 +109,26 @@ func is_combat_over() -> String:
     return ""
 
 # ============================================================
+# 카드 판정
+# ============================================================
+
+func needs_target(hand_index: int) -> bool:
+    var stats = GameData.get_card_stats(hand[hand_index])
+    return stats["type"] == "ATTACK"
+
+func get_auto_target() -> int:
+    var alive = _get_alive_enemies()
+    if alive.size() == 1:
+        return alive[0]
+    return -1
+
+func check_and_emit_combat_over() -> bool:
+    if is_combat_over() != "":
+        combat_over.emit(get_result())
+        return true
+    return false
+
+# ============================================================
 # 카드 사용
 # ============================================================
 
@@ -97,22 +138,28 @@ func can_play_card(hand_index: int) -> bool:
     var stats = GameData.get_card_stats(hand[hand_index])
     return player["energy"] >= stats["cost"]
 
-func play_card(hand_index: int, target_index: int) -> void:
+func play_card(hand_index: int, target_index: int) -> Dictionary:
     var card_inst = hand[hand_index]
     var stats = GameData.get_card_stats(card_inst)
 
     # 에너지 차감
     player["energy"] -= stats["cost"]
 
+    var result := {"card_name": stats["name"], "damage": 0, "block": 0, "target_name": ""}
+
     # 효과 적용
     if stats["damage"] > 0 and target_index >= 0 and target_index < enemies.size():
         _apply_damage_to_enemy(target_index, stats["damage"])
+        result["damage"] = stats["damage"]
+        result["target_name"] = enemies[target_index]["name"]
     if stats["block"] > 0:
         player["block"] += stats["block"]
+        result["block"] = stats["block"]
 
     # hand → discard
     hand.remove_at(hand_index)
     discard_pile.append(card_inst)
+    return result
 
 func exhaust_card(hand_index: int) -> void:
     var card_inst = hand[hand_index]
@@ -162,6 +209,13 @@ func _apply_damage_to_player(amount: int) -> void:
 # ============================================================
 # 내부 헬퍼
 # ============================================================
+
+func _collect_enemy_actions() -> Array:
+    var result := []
+    for e in enemies:
+        if e["hp"] > 0 and e["intent"].get("kind") == "attack":
+            result.append({"name": e["name"], "value": e["intent"]["value"]})
+    return result
 
 func _all_enemies_dead() -> bool:
     for e in enemies:

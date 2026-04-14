@@ -5,6 +5,7 @@ signal state_changed
 var run_data := {}
 
 func _ready() -> void:
+    BattleManager.combat_over.connect(_on_combat_finished)
     init_run()
 
 func init_run():
@@ -87,8 +88,8 @@ func _on_combat_finished(result: Dictionary):
 func start_combat():
     var node = get_current_node()
     var enemy_ids = node.get("enemies", ["test_dummy"])
-    BattleManager.start_combat(run_data["deck"], run_data["hp"], run_data["max_hp"], enemy_ids)
-    BattleManager.start_turn()
+    var ntype = node.get("type", "combat")
+    BattleManager.start_combat(run_data["deck"], run_data["hp"], run_data["max_hp"], enemy_ids, ntype)
     run_data["phase"] = "combat"
     state_changed.emit()
 

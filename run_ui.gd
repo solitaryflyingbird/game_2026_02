@@ -1,5 +1,14 @@
 extends Node2D
 
+# ============================================================
+# 단방향 흐름 원칙
+# ------------------------------------------------------------
+# UI는 "무엇을 선택했는지"를 매니저에 전달한다.
+# 매니저는 "그 결과 어떤 일이 일어나는지"를 처리하고 signal을 보낸다.
+# UI는 signal을 받아 화면만 갱신한다.
+# 단, UI 내부 상태(map_buttons 관리 등)는 논외.
+# ============================================================
+
 @onready var screens = {
     "title": $title_screen,
     "map": $floor_screen,
@@ -25,9 +34,6 @@ func _ready():
 
     # 플로어 (전투 대기) — 전투 개시 버튼
     $floor_screen/battle_start_button.pressed.connect(RunManager.start_combat)
-
-    # 전투 → 결과 수신
-    $combat_screen.combat_finished.connect(RunManager._on_combat_finished)
 
     # 보상 — "맵으로" 버튼
     $reward_screen/next_floor_button.pressed.connect(_on_return_to_map)

@@ -1,6 +1,13 @@
 extends Control
 
-signal combat_finished(result: Dictionary)
+# ============================================================
+# 단방향 흐름 원칙
+# ------------------------------------------------------------
+# UI는 "무엇을 선택했는지"를 매니저에 전달한다.
+# 매니저는 "그 결과 어떤 일이 일어나는지"를 처리하고 signal을 보낸다.
+# UI는 signal을 받아 화면만 갱신한다.
+# 단, UI 내부 상태(waiting_for_target 등)는 논외.
+# ============================================================
 
 # ============================================================
 # UI 노드 (코드에서 생성 — 안1 클래식 좌우 대치 레이아웃)
@@ -58,6 +65,9 @@ func _ready():
     _build_end_turn()
     _build_log()
 
+    BattleManager.turn_ended.connect(_on_turn_ended)
+    BattleManager.combat_over.connect(_on_combat_over)
+
 # ============================================================
 # UI 빌드
 # ============================================================
@@ -72,9 +82,7 @@ func _build_bg():
     add_child(bg_texture)
 
 func _set_bg_for_node():
-    var node = RunManager.get_current_node()
-    var node_type = node.get("type", "combat")
-    match node_type:
+    match BattleManager.node_type:
         "boss":
             bg_texture.texture = load("res://에셋/배틀 리소스/배경/배경2.png")
         _:
@@ -237,7 +245,6 @@ func _refresh_ui():
     _refresh_player()
     _refresh_enemies()
     _refresh_hand()
-    _check_combat_end()
 
 func _refresh_hud():
     var p = BattleManager.player
@@ -381,10 +388,13 @@ func _refresh_hand():
 # ============================================================
 
 func _on_card_clicked(hand_index: int):
+    if not BattleManager.can_play_card(hand_index):
+        return
+
     if waiting_for_target:
+        # 타겟 대기 중 다른 카드를 클릭한 경우 — 카드 교체
         pending_card_index = hand_index
-        var stats = GameData.get_card_stats(BattleManager.hand[hand_index])
-        if stats["type"] != "ATTACK":
+        if not BattleManager.needs_target(hand_index):
             waiting_for_target = false
             pending_card_index = -1
             log_label.text = ""
@@ -394,22 +404,18 @@ func _on_card_clicked(hand_index: int):
             _refresh_hand()
         return
 
-    var card_inst = BattleManager.hand[hand_index]
-    var stats = GameData.get_card_stats(card_inst)
-
-    if stats["type"] == "ATTACK":
-        var alive = BattleManager._get_alive_enemies()
-        if alive.size() == 1:
-            _execute_card(hand_index, alive[0])
-        elif alive.size() > 1:
+    if BattleManager.needs_target(hand_index):
+        var auto = BattleManager.get_auto_target()
+        if auto >= 0:
+            _execute_card(hand_index, auto)
+        else:
             waiting_for_target = true
             pending_card_index = hand_index
             log_label.text = "공격 대상을 선택하세요"
             _refresh_enemies()
             _refresh_hand()
-        return
-
-    _execute_card(hand_index, -1)
+    else:
+        _execute_card(hand_index, -1)
 
 func _on_enemy_clicked(enemy_index: int):
     if not waiting_for_target:
@@ -424,20 +430,16 @@ func _on_enemy_clicked(enemy_index: int):
     _execute_card(idx, enemy_index)
 
 func _execute_card(hand_index: int, target_index: int):
-    var card_inst = BattleManager.hand[hand_index]
-    var stats = GameData.get_card_stats(card_inst)
+    var result = BattleManager.play_card(hand_index, target_index)
 
-    BattleManager.play_card(hand_index, target_index)
-
-    if stats["damage"] > 0 and target_index >= 0:
-        var ename = BattleManager.enemies[target_index]["name"]
-        log_label.text = "%s → %s에게 %d 데미지" % [stats["name"], ename, stats["damage"]]
-        # 공격 모션 재생
+    if result["damage"] > 0:
+        log_label.text = "%s → %s에게 %d 데미지" % [result["card_name"], result["target_name"], result["damage"]]
         _play_attack_anim()
-    elif stats["block"] > 0:
-        log_label.text = "%s → 방어 %d" % [stats["name"], stats["block"]]
+    elif result["block"] > 0:
+        log_label.text = "%s → 방어 %d" % [result["card_name"], result["block"]]
 
     _refresh_ui()
+    BattleManager.check_and_emit_combat_over()
 
 func _play_attack_anim():
     player_sprite.play("attack")
@@ -449,32 +451,21 @@ func _on_player_anim_finished():
 func _on_end_turn():
     if waiting_for_target:
         return
-
-    BattleManager.end_turn()
-    BattleManager.enemy_turn()
-
-    var log_lines := PackedStringArray()
-    for e in BattleManager.enemies:
-        if e["hp"] > 0 and e["intent"].get("kind") == "attack":
-            log_lines.append("%s → %d 데미지" % [e["name"], e["intent"]["value"]])
-    if log_lines.size() > 0:
-        log_label.text = "\n".join(log_lines)
-
-    if _check_combat_end():
-        return
-
-    BattleManager.start_turn()
+    BattleManager.execute_end_turn()
     _refresh_ui()
 
+func _on_turn_ended(enemy_actions: Array):
+    if enemy_actions.size() > 0:
+        var log_lines := PackedStringArray()
+        for action in enemy_actions:
+            log_lines.append("%s → %d 데미지" % [action["name"], action["value"]])
+        log_label.text = "\n".join(log_lines)
+
 # ============================================================
-# 전투 종료
+# 전투 종료 (BattleManager.combat_over signal 수신)
 # ============================================================
 
-func _check_combat_end() -> bool:
-    var result = BattleManager.is_combat_over()
-    if result == "":
-        return false
-
+func _on_combat_over(_result: Dictionary):
     for btn in card_buttons:
         btn.queue_free()
     card_buttons.clear()
@@ -482,10 +473,6 @@ func _check_combat_end() -> bool:
         panel.queue_free()
     enemy_panels.clear()
     end_turn_button.visible = false
-
-    var r = BattleManager.get_result()
-    combat_finished.emit(r)
-    return true
 
 # ============================================================
 # 유틸
