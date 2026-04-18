@@ -20,10 +20,11 @@ var battle_state: Dictionary = {}
 # 전투 시작 (명세 §5.1)
 # ============================================================
 
-func begin_battle(floor_num: int) -> void:
-    var floors: Array = GameData.FLOORS
-    floor_num = clampi(floor_num, 1, floors.size())
-    var floor_data: Dictionary = floors[floor_num - 1]
+func begin_battle(enemy_id: String) -> void:
+    if not GameData.ENEMIES.has(enemy_id):
+        push_warning("begin_battle: 알 수 없는 enemy_id '%s'" % enemy_id)
+        return
+    var enemy_data: Dictionary = GameData.ENEMIES[enemy_id]
 
     var arm_l_src: Dictionary = RunManager.get_equipped_arm("L")
     var arm_r_src: Dictionary = RunManager.get_equipped_arm("R")
@@ -34,10 +35,11 @@ func begin_battle(floor_num: int) -> void:
         "arm_l": (arm_l_src.duplicate(true) if not arm_l_src.is_empty() else null),
         "arm_r": (arm_r_src.duplicate(true) if not arm_r_src.is_empty() else null),
 
-        "enemy_name": floor_data.name,
-        "enemy_max_hp": floor_data.max_hp,
-        "enemy_hp": floor_data.max_hp,
-        "enemy_intents": floor_data.intents.duplicate(),
+        "enemy_id": enemy_id,
+        "enemy_name": enemy_data.name,
+        "enemy_max_hp": enemy_data.max_hp,
+        "enemy_hp": enemy_data.max_hp,
+        "enemy_intents": enemy_data.intents.duplicate(),
         "enemy_intent_idx": 0,
 
         "deck": [],

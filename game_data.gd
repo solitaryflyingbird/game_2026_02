@@ -223,12 +223,36 @@ const ARM_MODULES = {
 }
 
 
-# --- 층 데이터 ---------------------------------------------------------------
+# --- 몬스터 데이터 -----------------------------------------------------------
+# enemy_id 로 조회. 노드에 enemy_id 를 두고 조우 시 여기를 참조.
 
-const FLOORS = [
-    { "floor": 1, "name": "훈련용 샌드백", "max_hp": 50,  "intents": [10, 20, 10, 20] },
-    { "floor": 2, "name": "경비 드론",    "max_hp": 80,  "intents": [20, 20, 10, 30] },
-    { "floor": 3, "name": "중형 로봇",    "max_hp": 120, "intents": [20, 30, 20, 30] },
-    { "floor": 4, "name": "돌격병",       "max_hp": 160, "intents": [30, 30, 20, 40] },
-    { "floor": 5, "name": "수호자",       "max_hp": 220, "intents": [30, 40, 20, 50, 30] },
-]
+const ENEMIES = {
+    "larva":            { "name": "에벌레",   "max_hp": 50,  "intents": [10, 20, 10, 20] },
+    "big_worm":         { "name": "큰벌레",   "max_hp": 80,  "intents": [20, 20, 10, 30] },
+    "soldier":          { "name": "병사",     "max_hp": 120, "intents": [20, 30, 20, 30] },
+    "assault_trooper":  { "name": "돌격병",   "max_hp": 160, "intents": [30, 30, 20, 40] },
+    "guardian":         { "name": "수호자",   "max_hp": 220, "intents": [30, 40, 20, 50, 30] },
+}
+
+
+# --- 테스트 맵 그래프 (예시노드.png 구조) ----------------------------------
+# 6 노드 육각형 사이클. 양방향 엣지.
+#
+#        [2]───[3]
+#       /        \
+#     [1]        [4]
+#       \        /
+#        [5]───[6]
+#
+# 나중에 type / layer / floor_num / position 등 필드가 노드별로 붙을 예정.
+# 지금은 순수 그래프 구조만.
+
+# position 은 0.0~1.0 정규화 좌표 [x, y]. UI 가 맵 영역 크기에 맞춰 투영.
+const TEST_MAP_GRAPH = {
+    1: { "id": 1, "connections": [2, 5], "position": [0.05, 0.5] },
+    2: { "id": 2, "connections": [1, 3], "position": [0.3,  0.15] },
+    3: { "id": 3, "connections": [2, 4], "position": [0.7,  0.15] },
+    4: { "id": 4, "connections": [3, 6], "position": [0.95, 0.5] },
+    5: { "id": 5, "connections": [1, 6], "position": [0.3,  0.85] },
+    6: { "id": 6, "connections": [5, 4], "position": [0.7,  0.85] },
+}

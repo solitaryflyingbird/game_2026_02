@@ -6,10 +6,10 @@ var run_data: Dictionary = {}
 
 func _ready() -> void:
     # 런은 GameManager.start_run() 이 호출하는 init_run() 으로 개시된다.
-    # 부팅 시점의 run_data 는 비어있고, 타이틀 상태는 GameManager 가 관리한다.
+    # 맵 시스템은 레거시 제거됨 — 노드 그래프 기반 재구현 대기 중.
     BattleManager.battle_ended.connect(_on_battle_ended)
 
-# GameManager.start_run() 이 호출한다.
+
 # ============================================================
 # ArmInstance 스키마 — GameData.ARM_MODULES 템플릿의 복제본 + 런타임 상태.
 # 각 팔은 장비 아이템 인스턴스로 취급되며 고유 instance_id 로 식별.
@@ -30,44 +30,51 @@ func _ready() -> void:
 #           null 이면 빈 슬롯.
 # ============================================================
 
+
+# GameManager.start_run() 이 호출한다.
 func init_run():
     var body_max: int = GameData.INITIAL_BODY.max_hp
     run_data = {
         "phase": "map",
+
+        # 히로인 상태
         "body_hp": body_max,
         "body_max_hp": body_max,
 
         # 팔 인스턴스 데이터베이스
-        "arm_instances": {},                            # { instance_id: ArmInstance }
-        "equipped_arms": { "L": null, "R": null },     # instance_id 또는 null (빈 슬롯 허용)
-        "next_arm_instance_id": 1,                      # 순차 증가 ID 발급용
-        "arm_inventory_max": 6,                         # 스페어(비장착) 최대 보관 개수
+        "arm_instances": {},
+        "equipped_arms": { "L": null, "R": null },
+        "next_arm_instance_id": 1,
+        "arm_inventory_max": 6,
 
-        "current_floor": 1,
-        "map": _generate_map(),
-        "current_node_id": -1,
+        # 맵 그래프 (GameData.TEST_MAP_GRAPH 의 인스턴스 복제 + visited 상태)
+        "map": _build_initial_map(),
+        "current_node_id": 1,   # 시작 노드
     }
     _setup_initial_arms()
+    # 시작 노드 방문 처리
+    if run_data["map"].has(run_data["current_node_id"]):
+        run_data["map"][run_data["current_node_id"]]["visited"] = true
     state_changed.emit()
+
 
 # GameManager.return_to_title() 이 호출한다.
 func reset() -> void:
     run_data = {}
     state_changed.emit()
 
+
 # --- 초기 팔 구성 ---------------------------------------------------------
-# 좌·우 슬롯에 원본 팔 2개 장착, 스페어로 열화 팔 1개.
 
 func _setup_initial_arms() -> void:
     var l_id: int = _create_arm_instance("left_arm_module")
     var r_id: int = _create_arm_instance("right_arm_module")
     _equip_arm("L", l_id)
     _equip_arm("R", r_id)
-    _create_arm_instance("degraded_arm_module")  # 스페어 (비장착)
+    _create_arm_instance("degraded_arm_module")  # 스페어
 
-# --- 팔 인스턴스 생성자 -------------------------------------------------------
-# 템플릿 복제 + ID 할당 + arm_instances 데이터베이스에 등록.
-# 반환: 생성된 instance_id.
+
+# --- 팔 인스턴스 생성자 ----------------------------------------------------
 
 func _create_arm_instance(template_id: String) -> int:
     var template: Dictionary = GameData.ARM_MODULES[template_id]
@@ -85,27 +92,15 @@ func _create_arm_instance(template_id: String) -> int:
     }
     return id
 
-# --- 장비 슬롯 할당 ---------------------------------------------------------
 
-# 내부용 (init 중 state_changed 를 따로 안 발신).
+# --- 장비 슬롯 ------------------------------------------------------------
+
+# 내부용 (init 중 state_changed 따로 안 발신).
 func _equip_arm(side: String, instance_id: int) -> void:
     run_data["equipped_arms"][side] = instance_id
 
-# 공용 장착 함수.
-# - side: "L" | "R"
-# - instance_id: run_data["arm_instances"] 에 등록된 팔의 ID
-#
-# 검사:
-#   1) 인스턴스가 실제로 존재하는가
-#   2) 인스턴스의 slot_type 이 해당 슬롯에 호환되는가
-#      ("any" 는 아무 슬롯 가능, 그 외는 슬롯과 일치해야 함)
-#
-# 부수효과:
-#   - 같은 인스턴스가 다른 슬롯에 장착 중이면 먼저 해제
-#   - 대상 슬롯에 있던 기존 팔은 자동으로 스페어가 됨 (arm_instances 에 남음)
-#   - 성공 시 state_changed 발신
-#
-# 반환: 장착 성공 여부.
+
+# 공용 장착 함수. slot_type 호환 검사 포함.
 func equip_arm(side: String, instance_id: int) -> bool:
     var instances: Dictionary = run_data.get("arm_instances", {})
     if not instances.has(instance_id):
@@ -125,9 +120,8 @@ func equip_arm(side: String, instance_id: int) -> bool:
 
     var equipped: Dictionary = run_data["equipped_arms"]
     if equipped.get(side) == instance_id:
-        return true  # 이미 장착됨, no-op
+        return true
 
-    # 같은 인스턴스가 다른 슬롯에 있으면 그 슬롯을 먼저 비움
     for other_side in equipped.keys():
         if other_side != side and equipped[other_side] == instance_id:
             equipped[other_side] = null
@@ -135,6 +129,7 @@ func equip_arm(side: String, instance_id: int) -> bool:
     equipped[side] = instance_id
     state_changed.emit()
     return true
+
 
 func _slot_type_for_side(side: String) -> String:
     match side:
@@ -145,6 +140,7 @@ func _slot_type_for_side(side: String) -> String:
         _:
             return ""
 
+
 # --- 장착 조회 (BattleManager 가 전투 시작 시 복제용으로 사용) -----------------
 
 func get_equipped_arm(side: String) -> Dictionary:
@@ -153,101 +149,67 @@ func get_equipped_arm(side: String) -> Dictionary:
         return {}
     return run_data.get("arm_instances", {}).get(equipped_id, {})
 
-# --- 맵 생성 (하드코딩 분기 맵) ---
 
-func _generate_map() -> Array:
-    # 테스트용 최소 맵: 일반 → 정비 → 보스
-    return [
-        {"id": 0, "row": 0, "col": 0, "type": "combat", "enemies": ["test_dummy"], "connections": [1], "visited": false},
-        {"id": 1, "row": 1, "col": 0, "type": "rest", "enemies": [], "connections": [2], "visited": false},
-        {"id": 2, "row": 2, "col": 0, "type": "boss", "enemies": ["test_dummy"], "connections": [], "visited": false},
-    ]
-
-func get_node_by_id(node_id: int) -> Dictionary:
-    if node_id >= 0 and node_id < run_data["map"].size():
-        return run_data["map"][node_id]
-    return {}
-
-func get_start_nodes() -> Array:
-    var starts := []
-    for node in run_data["map"]:
-        if node["row"] == 0:
-            starts.append(node["id"])
-    return starts
-
-func get_current_node() -> Dictionary:
-    return get_node_by_id(run_data["current_node_id"])
-
-func get_available_connections() -> Array:
-    if run_data["current_node_id"] == -1:
-        return get_start_nodes()
-    var node = get_current_node()
-    return node.get("connections", [])
-
-# --- 맵 이동 ---
-
-func move_to_node(node_id: int) -> bool:
-    var available = get_available_connections()
-    if node_id not in available:
-        push_warning("move_to_node: %d is not in available connections %s" % [node_id, available])
-        return false
-    run_data["current_node_id"] = node_id
-    run_data["map"][node_id]["visited"] = true
-    _enter_node(node_id)
-    return true
-
-func _enter_node(node_id: int):
-    var node = get_node_by_id(node_id)
-    match node.get("type", ""):
-        "combat", "elite", "boss":
-            run_data["phase"] = "floor"
-        "rest":
-            run_data["phase"] = "rest"
-        _:
-            run_data["phase"] = "floor"
-    state_changed.emit()
-
-func return_to_map():
-    run_data["phase"] = "map"
-    state_changed.emit()
-
-# --- 전투 결과 수신 -----------------------------------------------------------
-# BattleManager 가 HP sync back 을 이미 완료한 상태로 호출됨. 여기선 페이즈만 전환.
+# --- 전투 결과 수신 ---------------------------------------------------------
+# 맵 재구축 전까지 전투 진입 경로 없음. 훅만 유지해 둠.
+# BattleManager 가 body_hp / arm.hp 동기화는 이미 완료.
 
 func _on_battle_ended(result: String) -> void:
     if result == "defeat":
         run_data["phase"] = "lose"
     else:
-        run_data["current_floor"] = run_data.get("current_floor", 1) + 1
-        var node: Dictionary = get_current_node()
-        if node.get("type") == "boss":
-            run_data["phase"] = "victory"
-        else:
-            run_data["phase"] = "reward"
+        run_data["phase"] = "reward"
     state_changed.emit()
 
-# --- 전투 시작 ----------------------------------------------------------------
 
-func start_combat():
-    var floor_num: int = run_data.get("current_floor", 1)
-    BattleManager.begin_battle(floor_num)
-    run_data["phase"] = "combat"
+# ============================================================
+# 맵 그래프
+# ============================================================
+
+# 템플릿(GameData.TEST_MAP_GRAPH) 을 깊은 복제하여 런타임 맵 객체로 만든다.
+# 각 노드에 visited = false 를 부여.
+func _build_initial_map() -> Dictionary:
+    var result: Dictionary = {}
+    for id in GameData.TEST_MAP_GRAPH.keys():
+        var node: Dictionary = GameData.TEST_MAP_GRAPH[id].duplicate(true)
+        node["visited"] = false
+        result[id] = node
+    return result
+
+
+# --- 조회자 ---
+
+func get_current_node() -> Dictionary:
+    var id = run_data.get("current_node_id")
+    if id == null:
+        return {}
+    return run_data.get("map", {}).get(id, {})
+
+
+func get_node_by_id(id: int) -> Dictionary:
+    return run_data.get("map", {}).get(id, {})
+
+
+# --- 이동 ---
+
+# 현재 노드의 인접(connections) 중 하나로 이동. 유효성 검사 포함.
+# 반환: 이동 성공 여부.
+func move_to_node(target_id: int) -> bool:
+    var current: Dictionary = get_current_node()
+    if current.is_empty():
+        push_warning("move_to_node: 현재 노드 없음")
+        return false
+
+    var connections: Array = current.get("connections", [])
+    if target_id not in connections:
+        push_warning("move_to_node: %d 는 현재 노드(%d) 의 인접이 아님. 인접: %s" % [
+            target_id, current.get("id", -1), connections])
+        return false
+
+    run_data["current_node_id"] = target_id
+    var target: Dictionary = run_data["map"].get(target_id, {})
+    if not target.is_empty():
+        target["visited"] = true
+
     state_changed.emit()
-
-# --- 거점 (임시수리) ---
-
-func rest_heal_hp():
-    run_data["body_hp"] = min(run_data["body_hp"] + 15, run_data["body_max_hp"])
-    run_data["phase"] = "map"
-    state_changed.emit()
-
-# --- 디버그 ---
-
-func _debug_print_map():
-    print("=== MAP (%d nodes) ===" % run_data["map"].size())
-    for node in run_data["map"]:
-        var visited = "●" if node["visited"] else "○"
-        print("  %s [%d] row:%d col:%d type:%s conn:%s" % [
-            visited, node["id"], node["row"], node["col"], node["type"], node["connections"]])
-    print("  current_node_id: %d" % run_data["current_node_id"])
-    print("  available: %s" % get_available_connections())
+    return true
