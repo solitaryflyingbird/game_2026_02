@@ -26,16 +26,24 @@ const MAP_SIZE: Vector2 = Vector2(880, 500)
 var _map_root: Control
 var _node_buttons: Dictionary = {}   # id: int → Button
 
+# --- 전투 프리뷰 ---
+var _battle_preview_root: Control
+var _preview_enemy_name_label: Label
+var _preview_enemy_hp_label: Label
+var _preview_intents_label: Label
+
 
 func _ready():
     RunManager.state_changed.connect(_on_state_changed)
 
-    # 보상 / 결과 — 맵·진입 경로 없으므로 타이틀로 귀환
-    $reward_screen/next_floor_button.pressed.connect(GameManager.return_to_title)
+    # 보상 — 맵으로 복귀 (적 제거된 상태로)
+    $reward_screen/next_floor_button.pressed.connect(RunManager.return_to_map)
+    # 결과 (승리·패배 공용) — 타이틀로
     $result_screen/title_button.pressed.connect(GameManager.return_to_title)
 
     _build_arm_inspector()
     _build_map_display()
+    _build_battle_preview()
 
 
 # --- 화면 전환 ---
@@ -47,6 +55,8 @@ func _on_state_changed():
         _btn_show_spare.visible = false
         if _map_root != null:
             _map_root.visible = false
+        if _battle_preview_root != null:
+            _battle_preview_root.visible = false
         return
 
     var phase = RunManager.run_data["phase"]
@@ -62,6 +72,7 @@ func _on_state_changed():
     update_labels()
     _refresh_arm_inspector()
     _refresh_map_display()
+    _refresh_battle_preview()
 
     if phase == "combat":
         $battle_ui.begin_combat()
@@ -74,6 +85,8 @@ func show_phase(phase: String):
         screens[phase].visible = true
     if _map_root != null:
         _map_root.visible = phase == "map"
+    if _battle_preview_root != null:
+        _battle_preview_root.visible = phase == "battle_preview"
 
 
 func update_labels():
@@ -330,3 +343,76 @@ func _refresh_map_display():
         else:
             btn.modulate = Color(0.85, 0.85, 0.85)   # 옅은 — 미방문/비인접
             btn.disabled = true
+
+
+# ============================================================
+# 전투 프리뷰 — enemy_id 있는 노드 진입 시 표시. "전투 시작" 버튼으로 진입.
+# ============================================================
+
+func _build_battle_preview():
+    _battle_preview_root = Control.new()
+    _battle_preview_root.position = Vector2(340, 180)
+    _battle_preview_root.size = Vector2(600, 360)
+    _battle_preview_root.visible = false
+    add_child(_battle_preview_root)
+
+    var panel = Panel.new()
+    panel.size = Vector2(600, 360)
+    _battle_preview_root.add_child(panel)
+
+    var title = Label.new()
+    title.text = "조우"
+    title.position = Vector2(20, 16)
+    title.add_theme_font_size_override("font_size", 16)
+    _battle_preview_root.add_child(title)
+
+    _preview_enemy_name_label = Label.new()
+    _preview_enemy_name_label.position = Vector2(20, 56)
+    _preview_enemy_name_label.size = Vector2(560, 36)
+    _preview_enemy_name_label.add_theme_font_size_override("font_size", 24)
+    _battle_preview_root.add_child(_preview_enemy_name_label)
+
+    _preview_enemy_hp_label = Label.new()
+    _preview_enemy_hp_label.position = Vector2(20, 110)
+    _preview_enemy_hp_label.size = Vector2(560, 28)
+    _preview_enemy_hp_label.add_theme_font_size_override("font_size", 14)
+    _battle_preview_root.add_child(_preview_enemy_hp_label)
+
+    _preview_intents_label = Label.new()
+    _preview_intents_label.position = Vector2(20, 150)
+    _preview_intents_label.size = Vector2(560, 28)
+    _preview_intents_label.add_theme_font_size_override("font_size", 14)
+    _battle_preview_root.add_child(_preview_intents_label)
+
+    var start_btn = Button.new()
+    start_btn.text = "전투 시작"
+    start_btn.position = Vector2(230, 280)
+    start_btn.custom_minimum_size = Vector2(140, 48)
+    start_btn.pressed.connect(_on_preview_start_pressed)
+    _battle_preview_root.add_child(start_btn)
+
+
+func _on_preview_start_pressed():
+    RunManager.start_combat()
+
+
+func _refresh_battle_preview():
+    if _battle_preview_root == null or not _battle_preview_root.visible:
+        return
+    var current: Dictionary = RunManager.get_current_node()
+    var enemy_id = current.get("enemy_id")
+    if enemy_id == null or not GameData.ENEMIES.has(enemy_id):
+        _preview_enemy_name_label.text = "(enemy 없음)"
+        _preview_enemy_hp_label.text = ""
+        _preview_intents_label.text = ""
+        return
+
+    var enemy: Dictionary = GameData.ENEMIES[enemy_id]
+    _preview_enemy_name_label.text = enemy.get("name", "?")
+    _preview_enemy_hp_label.text = "HP %d" % enemy.get("max_hp", 0)
+
+    var intents: Array = enemy.get("intents", [])
+    var parts: Array = []
+    for v in intents:
+        parts.append(str(v))
+    _preview_intents_label.text = "공격 패턴: %s (순환)" % " → ".join(parts)

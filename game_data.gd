@@ -248,11 +248,12 @@ const ENEMIES = {
 # 지금은 순수 그래프 구조만.
 
 # position 은 0.0~1.0 정규화 좌표 [x, y]. UI 가 맵 영역 크기에 맞춰 투영.
+# enemy_id 가 있는 노드는 조우 시 해당 몬스터와 전투. 없으면 빈 노드 (시작점 등).
 const TEST_MAP_GRAPH = {
     1: { "id": 1, "connections": [2, 5], "position": [0.05, 0.5] },
-    2: { "id": 2, "connections": [1, 3], "position": [0.3,  0.15] },
-    3: { "id": 3, "connections": [2, 4], "position": [0.7,  0.15] },
-    4: { "id": 4, "connections": [3, 6], "position": [0.95, 0.5] },
-    5: { "id": 5, "connections": [1, 6], "position": [0.3,  0.85] },
-    6: { "id": 6, "connections": [5, 4], "position": [0.7,  0.85] },
+    2: { "id": 2, "connections": [1, 3], "position": [0.3,  0.15], "enemy_id": "larva" },
+    3: { "id": 3, "connections": [2, 4], "position": [0.7,  0.15], "enemy_id": "big_worm" },
+    4: { "id": 4, "connections": [3, 6], "position": [0.95, 0.5],  "enemy_id": "guardian" },
+    5: { "id": 5, "connections": [1, 6], "position": [0.3,  0.85], "enemy_id": "soldier" },
+    6: { "id": 6, "connections": [5, 4], "position": [0.7,  0.85], "enemy_id": "assault_trooper" },
 }

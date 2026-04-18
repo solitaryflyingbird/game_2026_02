@@ -151,14 +151,21 @@ func get_equipped_arm(side: String) -> Dictionary:
 
 
 # --- 전투 결과 수신 ---------------------------------------------------------
-# 맵 재구축 전까지 전투 진입 경로 없음. 훅만 유지해 둠.
 # BattleManager 가 body_hp / arm.hp 동기화는 이미 완료.
+# 승리 시 현재 노드의 enemy_id 를 null 로 — 몬스터 제거. 해당 자리는 이후 빈 노드.
 
 func _on_battle_ended(result: String) -> void:
     if result == "defeat":
         run_data["phase"] = "lose"
-    else:
-        run_data["phase"] = "reward"
+        state_changed.emit()
+        return
+
+    # 승리 — 현재 노드의 적 제거
+    var current_id = run_data.get("current_node_id")
+    if current_id != null and run_data.get("map", {}).has(current_id):
+        run_data["map"][current_id]["enemy_id"] = null
+
+    run_data["phase"] = "reward"
     state_changed.emit()
 
 
@@ -193,6 +200,7 @@ func get_node_by_id(id: int) -> Dictionary:
 # --- 이동 ---
 
 # 현재 노드의 인접(connections) 중 하나로 이동. 유효성 검사 포함.
+# 이동 후 대상 노드에 enemy_id 가 있으면 phase 를 "battle_preview" 로 전환.
 # 반환: 이동 성공 여부.
 func move_to_node(target_id: int) -> bool:
     var current: Dictionary = get_current_node()
@@ -211,5 +219,29 @@ func move_to_node(target_id: int) -> bool:
     if not target.is_empty():
         target["visited"] = true
 
+    # 적이 점거한 노드면 전투 프리뷰로 전환
+    if target.get("enemy_id") != null:
+        run_data["phase"] = "battle_preview"
+
     state_changed.emit()
     return true
+
+
+# --- 전투 진입 (battle_preview 에서 "전투 시작" 버튼이 호출) ---
+
+func start_combat() -> void:
+    var current: Dictionary = get_current_node()
+    var enemy_id = current.get("enemy_id")
+    if enemy_id == null:
+        push_warning("start_combat: 현재 노드에 enemy_id 없음")
+        return
+    BattleManager.begin_battle(enemy_id)
+    run_data["phase"] = "combat"
+    state_changed.emit()
+
+
+# --- 맵으로 복귀 (reward 에서 "맵으로" 버튼이 호출) ---
+
+func return_to_map() -> void:
+    run_data["phase"] = "map"
+    state_changed.emit()
