@@ -7,7 +7,7 @@ var run_data: Dictionary = {}
 func _ready() -> void:
     # 런은 GameManager.start_run() 이 호출하는 init_run() 으로 개시된다.
     # 부팅 시점의 run_data 는 비어있고, 타이틀 상태는 GameManager 가 관리한다.
-    pass
+    BattleManager.battle_ended.connect(_on_battle_ended)
 
 # GameManager.start_run() 이 호출한다.
 # ============================================================
@@ -145,6 +145,14 @@ func _slot_type_for_side(side: String) -> String:
         _:
             return ""
 
+# --- 장착 조회 (BattleManager 가 전투 시작 시 복제용으로 사용) -----------------
+
+func get_equipped_arm(side: String) -> Dictionary:
+    var equipped_id = run_data.get("equipped_arms", {}).get(side)
+    if equipped_id == null:
+        return {}
+    return run_data.get("arm_instances", {}).get(equipped_id, {})
+
 # --- 맵 생성 (하드코딩 분기 맵) ---
 
 func _generate_map() -> Array:
@@ -203,24 +211,26 @@ func return_to_map():
     run_data["phase"] = "map"
     state_changed.emit()
 
-# --- 전투 결과 수신 (5단계에서 새 battle_ended 시그널로 재배선 예정) ---
+# --- 전투 결과 수신 -----------------------------------------------------------
+# BattleManager 가 HP sync back 을 이미 완료한 상태로 호출됨. 여기선 페이즈만 전환.
 
-func _on_combat_finished(result: Dictionary):
-    run_data["body_hp"] = result["body_hp"]
-    if result["outcome"] == "lose":
+func _on_battle_ended(result: String) -> void:
+    if result == "defeat":
         run_data["phase"] = "lose"
     else:
-        var node = get_current_node()
+        run_data["current_floor"] = run_data.get("current_floor", 1) + 1
+        var node: Dictionary = get_current_node()
         if node.get("type") == "boss":
             run_data["phase"] = "victory"
         else:
             run_data["phase"] = "reward"
     state_changed.emit()
 
-# --- 전투 시작 (5단계에서 BattleManager.begin_battle 로 교체 예정) ---
+# --- 전투 시작 ----------------------------------------------------------------
 
 func start_combat():
-    # TODO(5단계): BattleManager.begin_battle(current_floor) 로 교체
+    var floor_num: int = run_data.get("current_floor", 1)
+    BattleManager.begin_battle(floor_num)
     run_data["phase"] = "combat"
     state_changed.emit()
 
