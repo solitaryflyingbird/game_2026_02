@@ -105,6 +105,70 @@ const CARD_TEMPLATES = {
         "degradation_resistance": 0.1,
         "description": "",
     },
+
+    # --- 열화 카드 6종 (원본 수치의 80%) ---
+    "degraded_punch_heavy": {
+        "name": "열화 강펀치",
+        "cost": 4,
+        "category": "attack",
+        "effects": [
+            { "type": "deal_damage", "value": 32 },
+            { "type": "damage_own_arm", "value": 16 },
+        ],
+        "degradation_resistance": 0.8,
+        "description": "",
+    },
+    "degraded_punch_medium": {
+        "name": "열화 중펀치",
+        "cost": 2,
+        "category": "attack",
+        "effects": [
+            { "type": "deal_damage", "value": 16 },
+            { "type": "damage_own_arm", "value": 8 },
+        ],
+        "degradation_resistance": 0.4,
+        "description": "",
+    },
+    "degraded_punch_light": {
+        "name": "열화 약펀치",
+        "cost": 1,
+        "category": "attack",
+        "effects": [
+            { "type": "deal_damage", "value": 8 },
+        ],
+        "degradation_resistance": 0.1,
+        "description": "",
+    },
+    "degraded_guard_heavy": {
+        "name": "열화 강가드",
+        "cost": 4,
+        "category": "defense",
+        "effects": [
+            { "type": "transfer_block", "value": 128 },
+        ],
+        "degradation_resistance": 0.8,
+        "description": "",
+    },
+    "degraded_guard_medium": {
+        "name": "열화 중가드",
+        "cost": 2,
+        "category": "defense",
+        "effects": [
+            { "type": "transfer_block", "value": 64 },
+        ],
+        "degradation_resistance": 0.4,
+        "description": "",
+    },
+    "degraded_guard_light": {
+        "name": "열화 약가드",
+        "cost": 1,
+        "category": "defense",
+        "effects": [
+            { "type": "transfer_block", "value": 32 },
+        ],
+        "degradation_resistance": 0.1,
+        "description": "",
+    },
 }
 
 
@@ -124,6 +188,11 @@ const _DEFAULT_ARM_DEGRADATION = {
     ],
 }
 
+const _DEGRADED_ARM_CARD_IDS = [
+    "degraded_punch_heavy", "degraded_punch_medium", "degraded_punch_light",
+    "degraded_guard_heavy", "degraded_guard_medium", "degraded_guard_light",
+]
+
 const ARM_MODULES = {
     "left_arm_module": {
         "name": "좌측 원본 팔",
@@ -135,6 +204,12 @@ const ARM_MODULES = {
         "name": "우측 원본 팔",
         "max_hp": 120,
         "card_ids": _DEFAULT_ARM_CARD_IDS,
+        "degradation": _DEFAULT_ARM_DEGRADATION,
+    },
+    "degraded_arm_module": {
+        "name": "열화 팔",
+        "max_hp": 96,
+        "card_ids": _DEGRADED_ARM_CARD_IDS,
         "degradation": _DEFAULT_ARM_DEGRADATION,
     },
 }

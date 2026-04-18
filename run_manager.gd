@@ -10,16 +10,38 @@ func _ready() -> void:
     pass
 
 # GameManager.start_run() 이 호출한다.
+# ============================================================
+# ArmInstance 스키마 — GameData.ARM_MODULES 템플릿의 복제본 + 런타임 상태.
+# 각 팔은 장비 아이템 인스턴스로 취급되며 고유 instance_id 로 식별.
+#
+# {
+#     "instance_id": int,          # 순차 증가 고유 ID (UI 노출 안 됨)
+#     "template_id": String,       # GameData.ARM_MODULES 의 키 (유래 추적용)
+#     "name": String,              # 템플릿에서 복제
+#     "max_hp": int,               # 템플릿에서 복제
+#     "hp": int,                   # 런타임 상태. 초기값 = max_hp
+#     "card_ids": Array,           # 템플릿에서 복제 (개별 수정 가능)
+#     "degradation": Dictionary,   # 템플릿에서 복제
+# }
+#
+# 저장 위치: run_data["arm_instances"][instance_id] = ArmInstance
+# 장비 여부: run_data["equipped_arms"]["L"|"R"] 에 instance_id 가 있으면 장착 중.
+#           null 이면 빈 슬롯.
+# ============================================================
+
 func init_run():
     var body_max: int = GameData.INITIAL_BODY.max_hp
     run_data = {
         "phase": "map",
         "body_hp": body_max,
         "body_max_hp": body_max,
-        "arm_modules": {
-            "L": _make_arm_state("left_arm_module"),
-            "R": _make_arm_state("right_arm_module"),
-        },
+
+        # 팔 인스턴스 데이터베이스
+        "arm_instances": {},                            # { instance_id: ArmInstance }
+        "equipped_arms": { "L": null, "R": null },     # instance_id 또는 null (빈 슬롯 허용)
+        "next_arm_instance_id": 1,                      # 순차 증가 ID 발급용
+        "arm_inventory_max": 6,                         # 스페어(비장착) 최대 보관 개수
+
         "current_floor": 1,
         "map": _generate_map(),
         "current_node_id": -1,
@@ -30,36 +52,6 @@ func init_run():
 func reset() -> void:
     run_data = {}
     state_changed.emit()
-
-func _make_arm_state(module_id: String) -> Dictionary:
-    var module: Dictionary = GameData.ARM_MODULES[module_id]
-    return {
-        "module_id": module_id,
-        "hp": module.max_hp,
-    }
-
-# --- 팔 상태 접근 API (side: "L" | "R") --------------------------------------
-
-func get_arm_state(side: String) -> Dictionary:
-    return run_data.get("arm_modules", {}).get(side, {})
-
-func get_arm_card_ids(side: String) -> Array:
-    var arm: Dictionary = get_arm_state(side)
-    if arm.is_empty():
-        return []
-    var module_id: String = arm.get("module_id", "")
-    if module_id == "" or not GameData.ARM_MODULES.has(module_id):
-        return []
-    return GameData.ARM_MODULES[module_id].card_ids
-
-func get_arm_card_stats(side: String, idx: int) -> Dictionary:
-    var card_ids: Array = get_arm_card_ids(side)
-    if idx < 0 or idx >= card_ids.size():
-        return {}
-    var card_id: String = card_ids[idx]
-    if not GameData.CARD_TEMPLATES.has(card_id):
-        return {}
-    return GameData.CARD_TEMPLATES[card_id]
 
 # --- 맵 생성 (하드코딩 분기 맵) ---
 
