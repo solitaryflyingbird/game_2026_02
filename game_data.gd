@@ -216,7 +216,7 @@ const ARM_MODULES = {
     "degraded_arm_module": {
         "name": "열화 팔",
         "slot_type": "any",
-        "max_hp": 96,
+        "max_hp": 48,
         "card_ids": _DEGRADED_ARM_CARD_IDS,
         "degradation": _DEFAULT_ARM_DEGRADATION,
     },

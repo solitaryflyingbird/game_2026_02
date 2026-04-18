@@ -439,12 +439,21 @@ func _sync_back_to_run() -> void:
     var arm_l = battle_state.get("arm_l")
     var arm_r = battle_state.get("arm_r")
     var instances: Dictionary = run_data.get("arm_instances", {})
+    var equipped: Dictionary = run_data.get("equipped_arms", {})
 
+    # HP 가 0 이면 팔이 완전히 파괴된 것 — 인스턴스 삭제 + 슬롯 해제.
+    # 살아있으면 hp 만 갱신.
     if arm_l != null:
         var l_id: int = arm_l.instance_id
-        if instances.has(l_id):
+        if arm_l.hp <= 0:
+            instances.erase(l_id)
+            equipped["L"] = null
+        elif instances.has(l_id):
             instances[l_id]["hp"] = arm_l.hp
     if arm_r != null:
         var r_id: int = arm_r.instance_id
-        if instances.has(r_id):
+        if arm_r.hp <= 0:
+            instances.erase(r_id)
+            equipped["R"] = null
+        elif instances.has(r_id):
             instances[r_id]["hp"] = arm_r.hp

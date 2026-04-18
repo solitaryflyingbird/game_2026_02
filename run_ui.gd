@@ -51,10 +51,17 @@ func _on_state_changed():
         _btn_show_equipped.visible = false
         _btn_show_spare.visible = false
         return
-    _btn_show_equipped.visible = true
-    _btn_show_spare.visible = true
 
     var phase = RunManager.run_data["phase"]
+
+    # 전투 중에는 팔 인스펙터(장착 조작) 숨김 — 배틀 중 교체 불가.
+    var in_combat: bool = phase == "combat"
+    _btn_show_equipped.visible = not in_combat
+    _btn_show_spare.visible = not in_combat
+    if in_combat:
+        _arm_inspector_panel.visible = false
+        _arm_inspect_mode = ""
+
     show_phase(phase)
     update_labels()
     _refresh_arm_inspector()
