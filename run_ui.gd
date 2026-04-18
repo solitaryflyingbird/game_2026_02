@@ -18,6 +18,13 @@ extends Node2D
 # 맵 노드 선택 버튼 (동적 생성)
 var map_buttons: Array = []
 
+# --- 팔 인스펙터 (자료구조 확인용 디버그 UI) ---
+var _btn_show_equipped: Button
+var _btn_show_spare: Button
+var _arm_inspector_panel: Panel
+var _arm_inspector_container: VBoxContainer
+var _arm_inspect_mode: String = ""  # "" | "equipped" | "spare"
+
 func _ready():
     RunManager.state_changed.connect(_on_state_changed)
 
@@ -34,14 +41,23 @@ func _ready():
     # 결과 — "타이틀로" (앱 레벨 전환이므로 GameManager 경유)
     $result_screen/title_button.pressed.connect(GameManager.return_to_title)
 
+    _build_arm_inspector()
+
 # --- 화면 전환 ---
 
 func _on_state_changed():
     if RunManager.run_data.is_empty():
+        _arm_inspector_panel.visible = false
+        _btn_show_equipped.visible = false
+        _btn_show_spare.visible = false
         return
+    _btn_show_equipped.visible = true
+    _btn_show_spare.visible = true
+
     var phase = RunManager.run_data["phase"]
     show_phase(phase)
     update_labels()
+    _refresh_arm_inspector()
 
     if phase == "combat":
         $battle_ui.begin_combat()
@@ -135,3 +151,155 @@ func update_labels():
             $result_screen/result_label.text = "임무 완료\n낙원 도달."
         "lose":
             $result_screen/result_label.text = "기동 정지\n임무 실패."
+
+# --- 팔 인스펙터 (자료구조 확인용 + 장착 조작) ---
+
+func _build_arm_inspector():
+    _btn_show_equipped = Button.new()
+    _btn_show_equipped.text = "장착된 팔"
+    _btn_show_equipped.position = Vector2(1100, 60)
+    _btn_show_equipped.custom_minimum_size = Vector2(140, 32)
+    _btn_show_equipped.pressed.connect(_on_show_equipped_pressed)
+    _btn_show_equipped.visible = false
+    add_child(_btn_show_equipped)
+
+    _btn_show_spare = Button.new()
+    _btn_show_spare.text = "스페어 팔"
+    _btn_show_spare.position = Vector2(1100, 98)
+    _btn_show_spare.custom_minimum_size = Vector2(140, 32)
+    _btn_show_spare.pressed.connect(_on_show_spare_pressed)
+    _btn_show_spare.visible = false
+    add_child(_btn_show_spare)
+
+    _arm_inspector_panel = Panel.new()
+    _arm_inspector_panel.position = Vector2(900, 140)
+    _arm_inspector_panel.size = Vector2(340, 420)
+    _arm_inspector_panel.visible = false
+    add_child(_arm_inspector_panel)
+
+    _arm_inspector_container = VBoxContainer.new()
+    _arm_inspector_container.position = Vector2(12, 12)
+    _arm_inspector_container.size = Vector2(316, 396)
+    _arm_inspector_container.add_theme_constant_override("separation", 6)
+    _arm_inspector_panel.add_child(_arm_inspector_container)
+
+func _on_show_equipped_pressed():
+    if _arm_inspect_mode == "equipped":
+        _arm_inspect_mode = ""
+        _arm_inspector_panel.visible = false
+    else:
+        _arm_inspect_mode = "equipped"
+        _arm_inspector_panel.visible = true
+        _refresh_arm_inspector()
+
+func _on_show_spare_pressed():
+    if _arm_inspect_mode == "spare":
+        _arm_inspect_mode = ""
+        _arm_inspector_panel.visible = false
+    else:
+        _arm_inspect_mode = "spare"
+        _arm_inspector_panel.visible = true
+        _refresh_arm_inspector()
+
+func _refresh_arm_inspector():
+    if not _arm_inspector_panel.visible:
+        return
+    _clear_inspector_container()
+
+    var data: Dictionary = RunManager.run_data
+    if data.is_empty():
+        return
+
+    var instances: Dictionary = data.get("arm_instances", {})
+    var equipped: Dictionary = data.get("equipped_arms", {"L": null, "R": null})
+
+    if _arm_inspect_mode == "equipped":
+        _build_equipped_view(instances, equipped)
+    elif _arm_inspect_mode == "spare":
+        var cap: int = data.get("arm_inventory_max", 6)
+        _build_spare_view(instances, equipped, cap)
+
+func _clear_inspector_container():
+    for child in _arm_inspector_container.get_children():
+        child.queue_free()
+
+func _build_equipped_view(instances: Dictionary, equipped: Dictionary):
+    _arm_inspector_container.add_child(_make_label("=== 장착된 팔 ===", 13))
+    for side in ["L", "R"]:
+        _arm_inspector_container.add_child(_make_label("[%s]" % side, 12))
+        var id = equipped.get(side, null)
+        if id == null:
+            _arm_inspector_container.add_child(_make_label("  (빈 슬롯)", 11))
+        else:
+            var arm: Dictionary = instances.get(id, {})
+            _arm_inspector_container.add_child(_make_label(_format_arm_text(arm), 11))
+
+func _build_spare_view(instances: Dictionary, equipped: Dictionary, cap: int):
+    var equipped_ids := [equipped.get("L"), equipped.get("R")]
+    var spare_ids: Array = []
+    for id in instances.keys():
+        if id not in equipped_ids:
+            spare_ids.append(id)
+
+    _arm_inspector_container.add_child(
+        _make_label("=== 스페어 팔 (%d / %d) ===" % [spare_ids.size(), cap], 13))
+
+    if spare_ids.is_empty():
+        _arm_inspector_container.add_child(_make_label("(비어있음)", 11))
+        return
+
+    for id in spare_ids:
+        var arm: Dictionary = instances.get(id, {})
+        _arm_inspector_container.add_child(_make_spare_entry(arm))
+
+func _make_spare_entry(arm: Dictionary) -> Control:
+    var entry = VBoxContainer.new()
+    entry.add_theme_constant_override("separation", 2)
+
+    entry.add_child(_make_label(_format_arm_text(arm), 11))
+
+    var slot_type: String = arm.get("slot_type", "")
+    var instance_id: int = arm.get("instance_id", 0)
+    var can_l: bool = slot_type == "any" or slot_type == "left_arm"
+    var can_r: bool = slot_type == "any" or slot_type == "right_arm"
+
+    var row = HBoxContainer.new()
+    row.add_theme_constant_override("separation", 6)
+
+    var btn_l = Button.new()
+    btn_l.text = "L 장착"
+    btn_l.custom_minimum_size = Vector2(80, 24)
+    btn_l.disabled = not can_l
+    btn_l.pressed.connect(_on_equip_pressed.bind("L", instance_id))
+    row.add_child(btn_l)
+
+    var btn_r = Button.new()
+    btn_r.text = "R 장착"
+    btn_r.custom_minimum_size = Vector2(80, 24)
+    btn_r.disabled = not can_r
+    btn_r.pressed.connect(_on_equip_pressed.bind("R", instance_id))
+    row.add_child(btn_r)
+
+    entry.add_child(row)
+    return entry
+
+func _on_equip_pressed(side: String, instance_id: int):
+    RunManager.equip_arm(side, instance_id)
+    # equip_arm 성공 시 state_changed 발신 → _on_state_changed → _refresh_arm_inspector 자동 갱신
+
+func _make_label(text: String, font_size: int) -> Label:
+    var lbl = Label.new()
+    lbl.text = text
+    lbl.add_theme_font_size_override("font_size", font_size)
+    return lbl
+
+func _format_arm_text(arm: Dictionary) -> String:
+    if arm.is_empty():
+        return "  (데이터 없음)"
+    return "  #%d %s (%s)\n  HP: %d / %d" % [
+        arm.get("instance_id", 0),
+        arm.get("name", "?"),
+        arm.get("slot_type", "?"),
+        arm.get("hp", 0),
+        arm.get("max_hp", 0),
+    ]

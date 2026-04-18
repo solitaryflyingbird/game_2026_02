@@ -193,21 +193,29 @@ const _DEGRADED_ARM_CARD_IDS = [
     "degraded_guard_heavy", "degraded_guard_medium", "degraded_guard_light",
 ]
 
+## slot_type 값:
+##   "left_arm"  = 좌측 슬롯 전용
+##   "right_arm" = 우측 슬롯 전용
+##   "any"       = 좌·우 아무 슬롯에 장착 가능
+
 const ARM_MODULES = {
     "left_arm_module": {
         "name": "좌측 원본 팔",
+        "slot_type": "left_arm",
         "max_hp": 120,
         "card_ids": _DEFAULT_ARM_CARD_IDS,
         "degradation": _DEFAULT_ARM_DEGRADATION,
     },
     "right_arm_module": {
         "name": "우측 원본 팔",
+        "slot_type": "right_arm",
         "max_hp": 120,
         "card_ids": _DEFAULT_ARM_CARD_IDS,
         "degradation": _DEFAULT_ARM_DEGRADATION,
     },
     "degraded_arm_module": {
         "name": "열화 팔",
+        "slot_type": "any",
         "max_hp": 96,
         "card_ids": _DEGRADED_ARM_CARD_IDS,
         "degradation": _DEFAULT_ARM_DEGRADATION,
