@@ -1,19 +1,14 @@
 extends Node2D
 
 # ============================================================
-# 단방향 흐름 원칙
-# ------------------------------------------------------------
-# UI는 "무엇을 선택했는지"를 매니저에 전달한다.
-# 매니저는 "그 결과 어떤 일이 일어나는지"를 처리하고 signal을 보낸다.
-# UI는 signal을 받아 화면만 갱신한다.
-# 단, UI 내부 상태(map_buttons 관리 등)는 논외.
+# 런 진행 중 UI. RunManager.state_changed 를 구독해 화면을 갱신한다.
+# 타이틀·설정 등 앱 레벨 UI 는 game_ui.gd 소관.
 # ============================================================
 
 @onready var screens = {
-    "title": $title_screen,
     "map": $floor_screen,
     "floor": $floor_screen,
-    "combat": $combat_screen,
+    "combat": $battle_ui,
     "reward": $reward_screen,
     "rest": $rest_screen,
     "lose": $result_screen,
@@ -26,12 +21,6 @@ var map_buttons: Array = []
 func _ready():
     RunManager.state_changed.connect(_on_state_changed)
 
-    # 타이틀
-    $title_screen/start_button.pressed.connect(RunManager.start_run)
-    $title_screen/load_button.pressed.connect(_on_load_pressed)
-    $title_screen/settings_button.pressed.connect(_on_settings_pressed)
-    $title_screen/quit_button.pressed.connect(_on_quit_pressed)
-
     # 플로어 (전투 대기) — 전투 개시 버튼
     $floor_screen/battle_start_button.pressed.connect(RunManager.start_combat)
 
@@ -42,20 +31,20 @@ func _ready():
     $rest_screen/heal_hp_button.pressed.connect(RunManager.rest_heal_hp)
     $rest_screen/skip_button.pressed.connect(_on_rest_skip)
 
-    # 결과
-    $result_screen/title_button.pressed.connect(RunManager.return_to_title)
-
-    _on_state_changed()
+    # 결과 — "타이틀로" (앱 레벨 전환이므로 GameManager 경유)
+    $result_screen/title_button.pressed.connect(GameManager.return_to_title)
 
 # --- 화면 전환 ---
 
 func _on_state_changed():
+    if RunManager.run_data.is_empty():
+        return
     var phase = RunManager.run_data["phase"]
     show_phase(phase)
     update_labels()
 
     if phase == "combat":
-        $combat_screen.begin_combat()
+        $battle_ui.begin_combat()
     elif phase == "map":
         _build_map_ui()
 
@@ -74,7 +63,7 @@ func _build_map_ui():
     map_buttons.clear()
 
     # 상태 표시
-    var hp_str = "%d / %d" % [RunManager.run_data["hp"], RunManager.run_data["max_hp"]]
+    var hp_str = "%d / %d" % [RunManager.run_data["body_hp"], RunManager.run_data["body_max_hp"]]
     $floor_screen/floor_label.text = "=== MAP ==="
     $floor_screen/hp_label.text = "HP %s" % hp_str
 
@@ -123,7 +112,9 @@ func _on_rest_skip():
 
 func update_labels():
     var d = RunManager.run_data
-    var hp_str = "%d / %d" % [d["hp"], d["max_hp"]]
+    if d.is_empty():
+        return
+    var hp_str = "%d / %d" % [d["body_hp"], d["body_max_hp"]]
 
     # 플로어 화면 (전투 대기)
     if d["phase"] == "floor":
@@ -136,7 +127,7 @@ func update_labels():
         $floor_screen/enemy_label.text = "적: %s" % ", ".join(enemies)
 
     # 거점 화면
-    $rest_screen/rest_info.text = "HP %s  |  덱 %d장" % [hp_str, d["deck"].size()]
+    $rest_screen/rest_info.text = "HP %s" % hp_str
 
     # 결과 화면
     match d["phase"]:
@@ -144,14 +135,3 @@ func update_labels():
             $result_screen/result_label.text = "임무 완료\n낙원 도달."
         "lose":
             $result_screen/result_label.text = "기동 정지\n임무 실패."
-
-# --- 타이틀 버튼 ---
-
-func _on_load_pressed():
-    print("[title] 불러오기: 아직 구현되지 않음")
-
-func _on_settings_pressed():
-    print("[title] 설정: 아직 구현되지 않음")
-
-func _on_quit_pressed():
-    get_tree().quit()

@@ -1,7 +1,8 @@
 [gd_scene format=3 uid="uid://cbjg7djo286vw"]
 
+[ext_resource type="Script" uid="uid://bt3vyxtom8d3b" path="res://game_ui.gd" id="0_gameui"]
 [ext_resource type="Script" uid="uid://b8bvqowkrti4r" path="res://run_ui.gd" id="1_ig7tw"]
-[ext_resource type="Script" uid="uid://bqi5225vijgvk" path="res://combat_screen.gd" id="2_0xm2m"]
+[ext_resource type="Script" uid="uid://bqi5225vijgvk" path="res://battle_ui.gd" id="2_0xm2m"]
 [ext_resource type="Texture2D" uid="uid://bu4xcq8yddd4t" path="res://에셋/타이틀/로고.png" id="3_logo"]
 [ext_resource type="Texture2D" uid="uid://dhj0q8nr1qrkn" path="res://에셋/타이틀/1.png" id="4_ch1"]
 [ext_resource type="Texture2D" uid="uid://df52j4lj3o7td" path="res://에셋/타이틀/2.png" id="5_ch2"]
@@ -66,81 +67,10 @@ animations = [{
 }]
 
 [node name="Main" type="Node2D" unique_id=1447001569]
+script = ExtResource("0_gameui")
 
 [node name="run_ui" type="Node2D" parent="." unique_id=443180052]
 script = ExtResource("1_ig7tw")
-
-[node name="title_screen" type="Control" parent="run_ui" unique_id=1813861609]
-layout_mode = 3
-anchors_preset = 0
-offset_right = 40.0
-offset_bottom = 40.0
-
-[node name="background_grid" type="ColorRect" parent="run_ui/title_screen" unique_id=338069454]
-material = SubResource("ShaderMaterial_grid")
-layout_mode = 0
-offset_right = 1280.0
-offset_bottom = 720.0
-mouse_filter = 2
-
-[node name="character_idle" type="AnimatedSprite2D" parent="run_ui/title_screen" unique_id=685858756]
-material = SubResource("ShaderMaterial_chredge")
-position = Vector2(1020, 360)
-scale = Vector2(0.55, 0.55)
-sprite_frames = SubResource("SpriteFrames_idle")
-animation = &"idle"
-autoplay = "idle"
-
-[node name="logo" type="TextureRect" parent="run_ui/title_screen" unique_id=1723697995]
-layout_mode = 0
-offset_left = 60.0
-offset_top = 40.0
-offset_right = 620.0
-offset_bottom = 360.0
-texture = ExtResource("3_logo")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="subtitle_label" type="Label" parent="run_ui/title_screen" unique_id=363638921]
-layout_mode = 0
-offset_left = 80.0
-offset_top = 370.0
-offset_right = 600.0
-offset_bottom = 410.0
-text = "설령 이 몸이 부서져도"
-horizontal_alignment = 1
-
-[node name="start_button" parent="run_ui/title_screen" unique_id=2054452317 instance=ExtResource("12_titlebtn")]
-layout_mode = 0
-offset_left = 160.0
-offset_top = 420.0
-offset_right = 520.0
-offset_bottom = 480.0
-text = "시작"
-
-[node name="load_button" parent="run_ui/title_screen" unique_id=1958273356 instance=ExtResource("12_titlebtn")]
-layout_mode = 0
-offset_left = 160.0
-offset_top = 495.0
-offset_right = 520.0
-offset_bottom = 555.0
-text = "불러오기"
-
-[node name="settings_button" parent="run_ui/title_screen" unique_id=1132728964 instance=ExtResource("12_titlebtn")]
-layout_mode = 0
-offset_left = 160.0
-offset_top = 570.0
-offset_right = 520.0
-offset_bottom = 630.0
-text = "설정"
-
-[node name="quit_button" parent="run_ui/title_screen" unique_id=1700237368 instance=ExtResource("12_titlebtn")]
-layout_mode = 0
-offset_left = 160.0
-offset_top = 645.0
-offset_right = 520.0
-offset_bottom = 705.0
-text = "종료"
 
 [node name="floor_screen" type="Control" parent="run_ui" unique_id=1121504737]
 layout_mode = 3
@@ -181,14 +111,14 @@ offset_right = 790.0
 offset_bottom = 460.0
 text = "전투 개시"
 
-[node name="combat_screen" type="Control" parent="run_ui" unique_id=1116226702]
+[node name="battle_ui" type="Control" parent="run_ui" unique_id=1116226702]
 layout_mode = 3
 anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
 script = ExtResource("2_0xm2m")
 
-[node name="deck_label" type="Label" parent="run_ui/combat_screen" unique_id=2008776941]
+[node name="deck_label" type="Label" parent="run_ui/battle_ui" unique_id=2008776941]
 layout_mode = 0
 offset_left = 80.0
 offset_top = 40.0
@@ -280,3 +210,75 @@ offset_top = 350.0
 offset_right = 760.0
 offset_bottom = 410.0
 text = "타이틀로"
+
+[node name="title_screen" type="Control" parent="." unique_id=1813861609]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="background_grid" type="ColorRect" parent="title_screen" unique_id=338069454]
+material = SubResource("ShaderMaterial_grid")
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 720.0
+mouse_filter = 2
+
+[node name="character_idle" type="AnimatedSprite2D" parent="title_screen" unique_id=685858756]
+material = SubResource("ShaderMaterial_chredge")
+position = Vector2(1020, 360)
+scale = Vector2(0.55, 0.55)
+sprite_frames = SubResource("SpriteFrames_idle")
+animation = &"idle"
+autoplay = "idle"
+
+[node name="logo" type="TextureRect" parent="title_screen" unique_id=1723697995]
+layout_mode = 0
+offset_left = 60.0
+offset_top = 40.0
+offset_right = 620.0
+offset_bottom = 360.0
+texture = ExtResource("3_logo")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="subtitle_label" type="Label" parent="title_screen" unique_id=363638921]
+layout_mode = 0
+offset_left = 80.0
+offset_top = 370.0
+offset_right = 600.0
+offset_bottom = 410.0
+text = "설령 이 몸이 부서져도"
+horizontal_alignment = 1
+
+[node name="start_button" parent="title_screen" unique_id=2054452317 instance=ExtResource("12_titlebtn")]
+layout_mode = 0
+offset_left = 160.0
+offset_top = 420.0
+offset_right = 520.0
+offset_bottom = 480.0
+text = "시작"
+
+[node name="load_button" parent="title_screen" unique_id=1958273356 instance=ExtResource("12_titlebtn")]
+layout_mode = 0
+offset_left = 160.0
+offset_top = 495.0
+offset_right = 520.0
+offset_bottom = 555.0
+text = "불러오기"
+
+[node name="settings_button" parent="title_screen" unique_id=1132728964 instance=ExtResource("12_titlebtn")]
+layout_mode = 0
+offset_left = 160.0
+offset_top = 570.0
+offset_right = 520.0
+offset_bottom = 630.0
+text = "설정"
+
+[node name="quit_button" parent="title_screen" unique_id=1700237368 instance=ExtResource("12_titlebtn")]
+layout_mode = 0
+offset_left = 160.0
+offset_top = 645.0
+offset_right = 520.0
+offset_bottom = 705.0
+text = "종료"

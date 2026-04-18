@@ -2,18 +2,64 @@ extends Node2D
 
 signal state_changed
 
-var run_data := {}
+var run_data: Dictionary = {}
 
 func _ready() -> void:
-    BattleManager.combat_over.connect(_on_combat_finished)
-    init_run()
+    # 런은 GameManager.start_run() 이 호출하는 init_run() 으로 개시된다.
+    # 부팅 시점의 run_data 는 비어있고, 타이틀 상태는 GameManager 가 관리한다.
+    pass
 
+# GameManager.start_run() 이 호출한다.
 func init_run():
-    run_data = GameData.starting_data.duplicate(true)
-    run_data["deck"] = GameData.make_starting_deck()
-    run_data["map"] = _generate_map()
-    run_data["current_node_id"] = -1
+    var body_max: int = GameData.INITIAL_BODY.max_hp
+    run_data = {
+        "phase": "map",
+        "body_hp": body_max,
+        "body_max_hp": body_max,
+        "arm_modules": {
+            "L": _make_arm_state("left_arm_module"),
+            "R": _make_arm_state("right_arm_module"),
+        },
+        "current_floor": 1,
+        "map": _generate_map(),
+        "current_node_id": -1,
+    }
     state_changed.emit()
+
+# GameManager.return_to_title() 이 호출한다.
+func reset() -> void:
+    run_data = {}
+    state_changed.emit()
+
+func _make_arm_state(module_id: String) -> Dictionary:
+    var module: Dictionary = GameData.ARM_MODULES[module_id]
+    return {
+        "module_id": module_id,
+        "hp": module.max_hp,
+    }
+
+# --- 팔 상태 접근 API (side: "L" | "R") --------------------------------------
+
+func get_arm_state(side: String) -> Dictionary:
+    return run_data.get("arm_modules", {}).get(side, {})
+
+func get_arm_card_ids(side: String) -> Array:
+    var arm: Dictionary = get_arm_state(side)
+    if arm.is_empty():
+        return []
+    var module_id: String = arm.get("module_id", "")
+    if module_id == "" or not GameData.ARM_MODULES.has(module_id):
+        return []
+    return GameData.ARM_MODULES[module_id].card_ids
+
+func get_arm_card_stats(side: String, idx: int) -> Dictionary:
+    var card_ids: Array = get_arm_card_ids(side)
+    if idx < 0 or idx >= card_ids.size():
+        return {}
+    var card_id: String = card_ids[idx]
+    if not GameData.CARD_TEMPLATES.has(card_id):
+        return {}
+    return GameData.CARD_TEMPLATES[card_id]
 
 # --- 맵 생성 (하드코딩 분기 맵) ---
 
@@ -69,10 +115,14 @@ func _enter_node(node_id: int):
             run_data["phase"] = "floor"
     state_changed.emit()
 
-# --- 전투 결과 수신 ---
+func return_to_map():
+    run_data["phase"] = "map"
+    state_changed.emit()
+
+# --- 전투 결과 수신 (5단계에서 새 battle_ended 시그널로 재배선 예정) ---
 
 func _on_combat_finished(result: Dictionary):
-    run_data["hp"] = result["hp"]
+    run_data["body_hp"] = result["body_hp"]
     if result["outcome"] == "lose":
         run_data["phase"] = "lose"
     else:
@@ -83,37 +133,18 @@ func _on_combat_finished(result: Dictionary):
             run_data["phase"] = "reward"
     state_changed.emit()
 
-# --- 전투 시작 ---
+# --- 전투 시작 (5단계에서 BattleManager.begin_battle 로 교체 예정) ---
 
 func start_combat():
-    var node = get_current_node()
-    var enemy_ids = node.get("enemies", ["test_dummy"])
-    var ntype = node.get("type", "combat")
-    BattleManager.start_combat(run_data["deck"], run_data["hp"], run_data["max_hp"], enemy_ids, ntype)
+    # TODO(5단계): BattleManager.begin_battle(current_floor) 로 교체
     run_data["phase"] = "combat"
     state_changed.emit()
 
 # --- 거점 (임시수리) ---
 
 func rest_heal_hp():
-    run_data["hp"] = min(run_data["hp"] + 15, run_data["max_hp"])
+    run_data["body_hp"] = min(run_data["body_hp"] + 15, run_data["body_max_hp"])
     run_data["phase"] = "map"
-    state_changed.emit()
-
-# --- 버튼 핸들러 ---
-
-func start_run():
-    init_run()
-    run_data["phase"] = "map"
-    state_changed.emit()
-
-func return_to_map():
-    run_data["phase"] = "map"
-    state_changed.emit()
-
-func return_to_title():
-    init_run()
-    run_data["phase"] = "title"
     state_changed.emit()
 
 # --- 디버그 ---
