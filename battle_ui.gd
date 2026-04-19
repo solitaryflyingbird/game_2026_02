@@ -1,53 +1,135 @@
 extends Control
 
 # ============================================================
-# battle_ui — BattleManager.get_snapshot() 을 렌더하고
-#             BattleManager.play_card / end_turn 으로 명령을 보낸다.
+# battle_ui — mockup/목업.html 레이아웃의 Godot 이식.
 #
-# 단방향 흐름:
-#   - 상태 읽기: BattleManager.get_snapshot() + get_card_preview()
-#   - 명령: play_card(idx), end_turn()
-#   - 시그널 구독으로 애니메이션 · 로그 · 종료 처리
+# 단방향 흐름 유지:
+#   - 상태 읽기: BattleManager.get_snapshot() + get_card_preview(idx)
+#   - 명령: BattleManager.play_card(idx), BattleManager.end_turn()
 #   - 상태 직접 수정 금지
+#
+# 시각 요소는 StyleBoxFlat + 라벨 + 기존 스프라이트로만 구성
+# (카드/바/오브 등에는 PNG 텍스처 불필요).
+# 에셋 참조:
+#   - 배경: 배틀 리소스/배경/배경1.png
+#   - 히로인 idle/attack 시퀀스
+#   - 적: 배틀 리소스/예시 적/몬스터 예시.png
+#   - 아이콘: 배틀 리소스/아이콘/적_공격_아이콘_레드.png, 방어 아이콘.png
 # ============================================================
 
 
-# --- UI 노드 ---
-var _bg: TextureRect
-var _hud_panel: Panel
-var _body_hp_bar: ProgressBar
-var _body_hp_label: Label
-var _energy_label: Label
-var _turn_label: Label
-var _deck_label: Label
+# --- 스테이지 · 레이아웃 상수 ---
+const STAGE_W: int = 1280
+const STAGE_H: int = 720
+const HUD_H: int = 86
+const CARD_W: int = 130
+const CARD_H: int = 180
+const CARD_GAP: int = 12
 
-var _player_sprite: AnimatedSprite2D
-var _arm_l_hp_bar: ProgressBar
-var _arm_l_hp_label: Label
+# --- 에셋 경로 ---
+const BG_TEX_PATH := "res://에셋/배틀 리소스/배경/배경1.png"
+const ENEMY_TEX_PATH := "res://에셋/배틀 리소스/예시 적/몬스터 예시.png"
+const ATTACK_ICON_RED_PATH := "res://에셋/배틀 리소스/아이콘/적_공격_아이콘_레드.png"
+const SHIELD_ICON_BLUE_PATH := "res://에셋/배틀 리소스/아이콘/방어 아이콘.png"
+const HEROINE_IDLE_DIR := "res://에셋/배틀 리소스/주인공/idle/"
+const HEROINE_ATTACK_DIR := "res://에셋/배틀 리소스/주인공/공격모션/"
+
+# --- 색상 팔레트 (목업.html 기반) ---
+const COL_HUD_BG := Color(0.04, 0.06, 0.1, 0.85)
+const COL_HUD_BORDER := Color(0.71, 0.78, 0.9, 0.25)
+const COL_BAR_BG := Color(0.0, 0.0, 0.0, 0.7)
+
+const COL_BODY_FILL := Color(0.82, 0.22, 0.24)
+const COL_BODY_BORDER := Color(1.0, 0.39, 0.39, 0.55)
+const COL_BODY_LBL := Color(0.75, 0.63, 0.63)
+
+const COL_L_FILL := Color(0.33, 0.58, 0.9)
+const COL_L_BORDER := Color(0.42, 0.66, 1.0, 0.55)
+const COL_L_ACCENT := Color(0.42, 0.66, 1.0)
+const COL_L_BLOCK_TXT := Color(0.61, 0.84, 1.0)
+
+const COL_R_FILL := Color(0.73, 0.48, 0.28)
+const COL_R_BORDER := Color(1.0, 0.72, 0.42, 0.55)
+const COL_R_ACCENT := Color(1.0, 0.72, 0.42)
+const COL_R_BLOCK_TXT := Color(1.0, 0.77, 0.61)
+
+const COL_ENEMY_FILL := Color(0.65, 0.21, 0.78)
+const COL_ENEMY_BORDER := Color(0.78, 0.39, 0.9, 0.55)
+const COL_ENEMY_NAME := Color(1.0, 0.72, 0.91)
+const COL_ENEMY_LEVEL := Color(0.69, 0.56, 0.78)
+const COL_ENEMY_INTENT_TXT := Color(1.0, 0.86, 0.84)
+
+const COL_ENERGY := Color(0.31, 0.62, 0.93)
+const COL_ENERGY_MAX := Color(0.54, 0.71, 0.88)
+const COL_TURN_LABEL := Color(1.0, 0.85, 0.54)
+const COL_GOLD := Color(1.0, 0.85, 0.54)
+
+const COL_CHIP_BG := Color(0.0, 0.0, 0.0, 0.45)
+const COL_CHIP_BORDER := Color(0.55, 0.71, 0.9, 0.2)
+
+const COL_ATK_BG := Color(0.26, 0.11, 0.16)
+const COL_ATK_BORDER := Color(0.78, 0.31, 0.38)
+const COL_DEF_BG := Color(0.1, 0.17, 0.24)
+const COL_DEF_BORDER := Color(0.31, 0.51, 0.78)
+
+const COL_CARD_ART_BG := Color(0.0, 0.0, 0.0, 0.4)
+const COL_CARD_DMG := Color(1.0, 0.60, 0.56)
+const COL_CARD_BLK := Color(0.55, 0.77, 1.0)
+const COL_CARD_SELF := Color(0.82, 0.63, 0.69)
+
+const COL_END_TURN_BG := Color(0.29, 0.23, 0.13)
+const COL_END_TURN_BORDER := Color(0.79, 0.63, 0.38)
+const COL_DECK_LBL := Color(0.66, 0.71, 0.78)
+
+
+# ============================================================
+# 노드 참조
+# ============================================================
+
+# 배경
+var _bg: TextureRect
+
+# 상단 HUD
+var _hud_panel: Panel
+
+var _body_hp_bar: ProgressBar
+var _body_hp_num: Label
+
+var _arm_l_bar: ProgressBar
+var _arm_l_hp_num: Label
+var _arm_l_block_box: HBoxContainer
 var _arm_l_block_label: Label
-var _arm_r_hp_bar: ProgressBar
-var _arm_r_hp_label: Label
+var _arm_r_bar: ProgressBar
+var _arm_r_hp_num: Label
+var _arm_r_block_box: HBoxContainer
 var _arm_r_block_label: Label
 
-var _enemy_sprite: TextureRect
+var _energy_label: Label
+var _energy_max_label: Label
+var _turn_number_label: Label
+
 var _enemy_name_label: Label
+var _enemy_level_label: Label
 var _enemy_hp_bar: ProgressBar
-var _enemy_hp_label: Label
+var _enemy_hp_num: Label
+var _enemy_intent_icon: TextureRect
 var _enemy_intent_label: Label
 
-var _hand_container: HBoxContainer
-var _card_buttons: Array = []
+var _deck_count_num: Label
+var _discard_count_num: Label
+var _hand_count_num: Label
 
+# 캐릭터
+var _heroine_sprite: AnimatedSprite2D
+var _enemy_sprite: TextureRect
+
+# 핸드 + 버튼
+var _hand_container: HBoxContainer
+var _card_roots: Array = []
+
+# 턴 종료 + 로그
 var _end_turn_button: Button
 var _log_label: Label
-
-# 적 스프라이트 후보 (MVP: 고정 텍스처 사용)
-var _enemy_textures: Array = []
-
-# --- 상수 ---
-const CARD_SIZE: Vector2 = Vector2(132, 168)
-const CARD_COLOR_L: Color = Color(0.55, 0.75, 1.0, 1.0)   # 좌팔 = 푸른빛
-const CARD_COLOR_R: Color = Color(1.0, 0.65, 0.55, 1.0)   # 우팔 = 붉은빛
 
 
 # ============================================================
@@ -55,84 +137,329 @@ const CARD_COLOR_R: Color = Color(1.0, 0.65, 0.55, 1.0)   # 우팔 = 붉은빛
 # ============================================================
 
 func _ready() -> void:
-    _build_ui()
-    _connect_signals()
+    # 씬에 남은 레거시 자식 전부 숨김 (예: 사용하지 않는 deck_label)
+    for c in get_children():
+        if c is CanvasItem:
+            c.hide()
 
+    # 전체 스테이지 기준 좌표 사용 (anchors_preset=0 유지)
+    position = Vector2.ZERO
+    size = Vector2(STAGE_W, STAGE_H)
 
-func _build_ui() -> void:
     _build_bg()
     _build_hud()
-    _build_player_area()
-    _build_enemy_area()
+    _build_heroine()
+    _build_enemy()
     _build_hand_area()
     _build_end_turn()
     _build_log()
+    _connect_signals()
 
+
+# ------------------------------------------------------------
+# 배경
+# ------------------------------------------------------------
 
 func _build_bg() -> void:
     _bg = TextureRect.new()
-    _bg.position = Vector2(0, 0)
-    _bg.size = Vector2(1280, 720)
+    _bg.position = Vector2.ZERO
+    _bg.size = Vector2(STAGE_W, STAGE_H)
     _bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     _bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     _bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    var tex: Texture2D = load("res://에셋/배틀 리소스/배경/배경1.png")
-    if tex != null:
-        _bg.texture = tex
+    _bg.modulate = Color(0.62, 0.62, 0.62)   # brightness 0.6 approx
+    var t: Texture2D = load(BG_TEX_PATH)
+    if t != null:
+        _bg.texture = t
     add_child(_bg)
 
 
+# ------------------------------------------------------------
+# HUD
+# ------------------------------------------------------------
+
 func _build_hud() -> void:
     _hud_panel = Panel.new()
-    _hud_panel.position = Vector2(0, 0)
-    _hud_panel.size = Vector2(1280, 56)
+    _hud_panel.position = Vector2.ZERO
+    _hud_panel.size = Vector2(STAGE_W, HUD_H)
+    _hud_panel.add_theme_stylebox_override("panel", _make_hud_style())
     add_child(_hud_panel)
 
-    _body_hp_bar = ProgressBar.new()
-    _body_hp_bar.position = Vector2(20, 14)
-    _body_hp_bar.size = Vector2(300, 28)
-    _body_hp_bar.max_value = 150
-    _body_hp_bar.show_percentage = false
-    _hud_panel.add_child(_body_hp_bar)
-
-    _body_hp_label = Label.new()
-    _body_hp_label.position = Vector2(24, 16)
-    _body_hp_label.size = Vector2(292, 28)
-    _body_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    _body_hp_label.add_theme_font_size_override("font_size", 14)
-    _hud_panel.add_child(_body_hp_label)
-
-    _energy_label = Label.new()
-    _energy_label.position = Vector2(340, 16)
-    _energy_label.size = Vector2(140, 28)
-    _energy_label.add_theme_font_size_override("font_size", 16)
-    _hud_panel.add_child(_energy_label)
-
-    _turn_label = Label.new()
-    _turn_label.position = Vector2(580, 16)
-    _turn_label.size = Vector2(120, 28)
-    _turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    _turn_label.add_theme_font_size_override("font_size", 14)
-    _hud_panel.add_child(_turn_label)
-
-    _deck_label = Label.new()
-    _deck_label.position = Vector2(940, 16)
-    _deck_label.size = Vector2(320, 28)
-    _deck_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    _deck_label.add_theme_font_size_override("font_size", 13)
-    _hud_panel.add_child(_deck_label)
+    _build_hp_panel_hero()
+    _build_hud_center()
+    _build_hp_enemy()
+    _build_hud_deck()
 
 
-func _build_player_area() -> void:
-    # 주인공 스프라이트 (idle 루프 + attack 1회)
-    _player_sprite = AnimatedSprite2D.new()
+func _make_hud_style() -> StyleBoxFlat:
+    var s := StyleBoxFlat.new()
+    s.bg_color = COL_HUD_BG
+    s.border_width_bottom = 1
+    s.border_color = COL_HUD_BORDER
+    return s
+
+
+# --- 좌: 히로인 HP 패널 ---
+func _build_hp_panel_hero() -> void:
+    var root := VBoxContainer.new()
+    root.position = Vector2(26, 10)
+    root.custom_minimum_size = Vector2(540, 66)
+    root.add_theme_constant_override("separation", 6)
+    _hud_panel.add_child(root)
+
+    # 몸 라인
+    var body_line := HBoxContainer.new()
+    body_line.add_theme_constant_override("separation", 8)
+    body_line.custom_minimum_size = Vector2(540, 16)
+    root.add_child(body_line)
+
+    var lbl_body := _make_label("몸", 10, COL_BODY_LBL)
+    lbl_body.custom_minimum_size = Vector2(36, 14)
+    lbl_body.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    body_line.add_child(lbl_body)
+
+    _body_hp_bar = _make_hp_bar(COL_BODY_FILL, COL_BODY_BORDER, Vector2(410, 14))
+    _body_hp_bar.size_flags_horizontal = 0
+    body_line.add_child(_body_hp_bar)
+
+    _body_hp_num = _make_label("0 / 0", 12, Color.WHITE)
+    _body_hp_num.custom_minimum_size = Vector2(78, 14)
+    _body_hp_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    _body_hp_num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    body_line.add_child(_body_hp_num)
+
+    # 팔 줄
+    var arm_row := HBoxContainer.new()
+    arm_row.add_theme_constant_override("separation", 10)
+    arm_row.custom_minimum_size = Vector2(540, 32)
+    root.add_child(arm_row)
+
+    arm_row.add_child(_build_arm_chip("L"))
+    arm_row.add_child(_build_arm_chip("R"))
+
+
+func _build_arm_chip(side: String) -> Panel:
+    var chip := Panel.new()
+    chip.custom_minimum_size = Vector2(265, 30)
+    chip.add_theme_stylebox_override(
+        "panel", _make_panel_style(COL_CHIP_BG, COL_CHIP_BORDER, 2))
+
+    var row := HBoxContainer.new()
+    row.position = Vector2(8, 5)
+    row.custom_minimum_size = Vector2(249, 20)
+    row.add_theme_constant_override("separation", 6)
+    chip.add_child(row)
+
+    var accent := COL_L_ACCENT if side == "L" else COL_R_ACCENT
+    var fill := COL_L_FILL if side == "L" else COL_R_FILL
+    var border := COL_L_BORDER if side == "L" else COL_R_BORDER
+    var blk_col := COL_L_BLOCK_TXT if side == "L" else COL_R_BLOCK_TXT
+
+    var side_lbl := _make_label(side, 11, accent)
+    side_lbl.custom_minimum_size = Vector2(14, 20)
+    side_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    row.add_child(side_lbl)
+
+    var bar := _make_hp_bar(fill, border, Vector2(110, 8))
+    if side == "L":
+        _arm_l_bar = bar
+    else:
+        _arm_r_bar = bar
+    row.add_child(bar)
+
+    var hp_num := _make_label("0 / 0", 11, Color.WHITE)
+    hp_num.custom_minimum_size = Vector2(66, 20)
+    hp_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    hp_num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    if side == "L":
+        _arm_l_hp_num = hp_num
+    else:
+        _arm_r_hp_num = hp_num
+    row.add_child(hp_num)
+
+    # 블록 박스 (아이콘 + 숫자)
+    var blk_box := HBoxContainer.new()
+    blk_box.add_theme_constant_override("separation", 3)
+    blk_box.visible = false
+    row.add_child(blk_box)
+
+    var blk_icon := TextureRect.new()
+    var shield_tex: Texture2D = load(SHIELD_ICON_BLUE_PATH)
+    if shield_tex != null:
+        blk_icon.texture = shield_tex
+    blk_icon.custom_minimum_size = Vector2(14, 14)
+    blk_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    blk_icon.modulate = blk_col
+    blk_box.add_child(blk_icon)
+
+    var blk_lbl := _make_label("", 10, blk_col)
+    blk_lbl.custom_minimum_size = Vector2(20, 14)
+    blk_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    blk_box.add_child(blk_lbl)
+
+    if side == "L":
+        _arm_l_block_box = blk_box
+        _arm_l_block_label = blk_lbl
+    else:
+        _arm_r_block_box = blk_box
+        _arm_r_block_label = blk_lbl
+
+    return chip
+
+
+# --- 중앙: 에너지 + 턴 ---
+func _build_hud_center() -> void:
+    var root := HBoxContainer.new()
+    root.position = Vector2(594, 16)
+    root.custom_minimum_size = Vector2(160, 56)
+    root.add_theme_constant_override("separation", 18)
+    root.alignment = BoxContainer.ALIGNMENT_CENTER
+    _hud_panel.add_child(root)
+
+    # 에너지
+    var energy_wrap := HBoxContainer.new()
+    energy_wrap.add_theme_constant_override("separation", 6)
+    root.add_child(energy_wrap)
+
+    var orb := Panel.new()
+    orb.custom_minimum_size = Vector2(36, 36)
+    var orb_style := StyleBoxFlat.new()
+    orb_style.bg_color = COL_ENERGY
+    orb_style.border_width_left = 2
+    orb_style.border_width_right = 2
+    orb_style.border_width_top = 2
+    orb_style.border_width_bottom = 2
+    orb_style.border_color = Color(1, 1, 1, 0.85)
+    orb_style.corner_radius_top_left = 18
+    orb_style.corner_radius_top_right = 18
+    orb_style.corner_radius_bottom_left = 18
+    orb_style.corner_radius_bottom_right = 18
+    orb.add_theme_stylebox_override("panel", orb_style)
+    energy_wrap.add_child(orb)
+
+    _energy_label = _make_label("0", 16, Color.WHITE)
+    _energy_label.position = Vector2(0, 0)
+    _energy_label.size = Vector2(36, 36)
+    _energy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _energy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    orb.add_child(_energy_label)
+
+    _energy_max_label = _make_label("/ 0", 12, COL_ENERGY_MAX)
+    _energy_max_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    _energy_max_label.custom_minimum_size = Vector2(0, 36)
+    energy_wrap.add_child(_energy_max_label)
+
+    # 턴
+    var turn_block := VBoxContainer.new()
+    turn_block.custom_minimum_size = Vector2(60, 36)
+    turn_block.add_theme_constant_override("separation", 0)
+    turn_block.alignment = BoxContainer.ALIGNMENT_CENTER
+    root.add_child(turn_block)
+
+    var turn_lbl := _make_label("TURN", 10, COL_TURN_LABEL)
+    turn_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    turn_block.add_child(turn_lbl)
+
+    _turn_number_label = _make_label("0", 22, Color.WHITE)
+    _turn_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    turn_block.add_child(_turn_number_label)
+
+
+# --- 우: 적 HP 패널 ---
+func _build_hp_enemy() -> void:
+    var root := VBoxContainer.new()
+    root.position = Vector2(782, 10)
+    root.custom_minimum_size = Vector2(360, 66)
+    root.add_theme_constant_override("separation", 4)
+    _hud_panel.add_child(root)
+
+    var head := HBoxContainer.new()
+    head.add_theme_constant_override("separation", 8)
+    head.custom_minimum_size = Vector2(360, 16)
+    root.add_child(head)
+
+    _enemy_name_label = _make_label("", 14, COL_ENEMY_NAME)
+    _enemy_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    _enemy_name_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+    head.add_child(_enemy_name_label)
+
+    _enemy_level_label = _make_label("", 9, COL_ENEMY_LEVEL)
+    _enemy_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    _enemy_level_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+    _enemy_level_label.custom_minimum_size = Vector2(60, 16)
+    head.add_child(_enemy_level_label)
+
+    _enemy_hp_bar = _make_hp_bar(COL_ENEMY_FILL, COL_ENEMY_BORDER, Vector2(360, 14))
+    root.add_child(_enemy_hp_bar)
+
+    var foot := HBoxContainer.new()
+    foot.add_theme_constant_override("separation", 8)
+    foot.custom_minimum_size = Vector2(360, 22)
+    root.add_child(foot)
+
+    _enemy_hp_num = _make_label("HP 0 / 0", 12, Color.WHITE)
+    _enemy_hp_num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    foot.add_child(_enemy_hp_num)
+
+    var spacer := Control.new()
+    spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    foot.add_child(spacer)
+
+    var intent_box := HBoxContainer.new()
+    intent_box.add_theme_constant_override("separation", 6)
+    foot.add_child(intent_box)
+
+    _enemy_intent_icon = TextureRect.new()
+    var atk_tex: Texture2D = load(ATTACK_ICON_RED_PATH)
+    if atk_tex != null:
+        _enemy_intent_icon.texture = atk_tex
+    _enemy_intent_icon.custom_minimum_size = Vector2(22, 22)
+    _enemy_intent_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    intent_box.add_child(_enemy_intent_icon)
+
+    _enemy_intent_label = _make_label("", 12, COL_ENEMY_INTENT_TXT)
+    _enemy_intent_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    _enemy_intent_label.custom_minimum_size = Vector2(0, 22)
+    intent_box.add_child(_enemy_intent_label)
+
+
+# --- 최우: 덱 카운트 ---
+func _build_hud_deck() -> void:
+    var root := VBoxContainer.new()
+    root.position = Vector2(1160, 12)
+    root.custom_minimum_size = Vector2(110, 60)
+    root.add_theme_constant_override("separation", 2)
+    _hud_panel.add_child(root)
+
+    _deck_count_num = _make_deck_row("덱", root)
+    _discard_count_num = _make_deck_row("버림", root)
+    _hand_count_num = _make_deck_row("손", root)
+
+
+func _make_deck_row(lbl_text: String, parent: Control) -> Label:
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation", 4)
+    parent.add_child(row)
+    var lbl := _make_label(lbl_text, 11, COL_DECK_LBL)
+    row.add_child(lbl)
+    var num := _make_label("0", 13, Color.WHITE)
+    row.add_child(num)
+    return num
+
+
+# ------------------------------------------------------------
+# 캐릭터
+# ------------------------------------------------------------
+
+func _build_heroine() -> void:
+    _heroine_sprite = AnimatedSprite2D.new()
     var frames := SpriteFrames.new()
 
     frames.add_animation("idle")
     frames.set_animation_speed("idle", 4)
     frames.set_animation_loop("idle", true)
     for i in range(4):
-        var f: Texture2D = load("res://에셋/배틀 리소스/주인공/idle/frame_%d.png" % i)
+        var f: Texture2D = load(HEROINE_IDLE_DIR + "frame_%d.png" % i)
         if f != null:
             frames.add_frame("idle", f)
 
@@ -140,134 +467,96 @@ func _build_player_area() -> void:
     frames.set_animation_speed("attack", 10)
     frames.set_animation_loop("attack", false)
     for i in range(5):
-        var f: Texture2D = load("res://에셋/배틀 리소스/주인공/공격모션/frame_%d.png" % i)
-        if f != null:
-            frames.add_frame("attack", f)
+        var f2: Texture2D = load(HEROINE_ATTACK_DIR + "frame_%d.png" % i)
+        if f2 != null:
+            frames.add_frame("attack", f2)
 
-    _player_sprite.sprite_frames = frames
-    _player_sprite.animation = "idle"
-    _player_sprite.autoplay = "idle"
-    _player_sprite.position = Vector2(220, 280)
-    _player_sprite.scale = Vector2(0.42, 0.42)
-    _player_sprite.animation_finished.connect(_on_player_anim_finished)
-    add_child(_player_sprite)
-
-    # 양팔 HP + 블록 패널
-    _make_arm_panel("L", Vector2(60, 400))
-    _make_arm_panel("R", Vector2(240, 400))
+    _heroine_sprite.sprite_frames = frames
+    _heroine_sprite.animation = "idle"
+    _heroine_sprite.autoplay = "idle"
+    _heroine_sprite.scale = Vector2(0.42, 0.42)
+    _heroine_sprite.position = Vector2(240, 420)
+    _heroine_sprite.animation_finished.connect(_on_heroine_anim_finished)
+    add_child(_heroine_sprite)
 
 
-func _make_arm_panel(side: String, pos: Vector2) -> void:
-    var c := VBoxContainer.new()
-    c.position = pos
-    c.size = Vector2(160, 100)
-    c.add_theme_constant_override("separation", 3)
-
-    var title := Label.new()
-    title.text = ("좌팔" if side == "L" else "우팔")
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", 13)
-    c.add_child(title)
-
-    var hp_bar := ProgressBar.new()
-    hp_bar.custom_minimum_size = Vector2(150, 14)
-    hp_bar.max_value = 120
-    hp_bar.show_percentage = false
-    c.add_child(hp_bar)
-
-    var hp_label := Label.new()
-    hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    hp_label.add_theme_font_size_override("font_size", 12)
-    c.add_child(hp_label)
-
-    var block_label := Label.new()
-    block_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    block_label.add_theme_font_size_override("font_size", 12)
-    c.add_child(block_label)
-
-    if side == "L":
-        _arm_l_hp_bar = hp_bar
-        _arm_l_hp_label = hp_label
-        _arm_l_block_label = block_label
-    else:
-        _arm_r_hp_bar = hp_bar
-        _arm_r_hp_label = hp_label
-        _arm_r_block_label = block_label
-
-    add_child(c)
-
-
-func _build_enemy_area() -> void:
-    _enemy_textures = [
-        load("res://에셋/배틀 리소스/예시 적/1.png"),
-        load("res://에셋/배틀 리소스/예시 적/2.png"),
-    ]
-
-    _enemy_name_label = Label.new()
-    _enemy_name_label.position = Vector2(860, 140)
-    _enemy_name_label.size = Vector2(280, 28)
-    _enemy_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    _enemy_name_label.add_theme_font_size_override("font_size", 16)
-    add_child(_enemy_name_label)
-
+func _build_enemy() -> void:
     _enemy_sprite = TextureRect.new()
-    _enemy_sprite.position = Vector2(860, 175)
-    _enemy_sprite.size = Vector2(280, 200)
     _enemy_sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    _enemy_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    if _enemy_textures.size() > 0 and _enemy_textures[0] != null:
-        _enemy_sprite.texture = _enemy_textures[0]
+    _enemy_sprite.stretch_mode = TextureRect.STRETCH_SCALE
+    _enemy_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+    var t: Texture2D = load(ENEMY_TEX_PATH)
+    if t != null:
+        _enemy_sprite.texture = t
+        var tex_sz: Vector2 = t.get_size()
+        var h: float = 600.0
+        var w: float = tex_sz.x * (h / tex_sz.y)
+        _enemy_sprite.size = Vector2(w, h)
+        # 목업: right -40, bottom 40 (우측 40px 넘침)
+        _enemy_sprite.position = Vector2(STAGE_W - w + 40, STAGE_H - 40 - h)
     add_child(_enemy_sprite)
 
-    _enemy_hp_bar = ProgressBar.new()
-    _enemy_hp_bar.position = Vector2(860, 390)
-    _enemy_hp_bar.size = Vector2(280, 18)
-    _enemy_hp_bar.show_percentage = false
-    add_child(_enemy_hp_bar)
 
-    _enemy_hp_label = Label.new()
-    _enemy_hp_label.position = Vector2(860, 390)
-    _enemy_hp_label.size = Vector2(280, 18)
-    _enemy_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    _enemy_hp_label.add_theme_font_size_override("font_size", 12)
-    add_child(_enemy_hp_label)
-
-    _enemy_intent_label = Label.new()
-    _enemy_intent_label.position = Vector2(860, 418)
-    _enemy_intent_label.size = Vector2(280, 24)
-    _enemy_intent_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    _enemy_intent_label.add_theme_font_size_override("font_size", 14)
-    add_child(_enemy_intent_label)
-
+# ------------------------------------------------------------
+# 핸드
+# ------------------------------------------------------------
 
 func _build_hand_area() -> void:
-    _hand_container = HBoxContainer.new()
-    _hand_container.position = Vector2(140, 540)
-    _hand_container.add_theme_constant_override("separation", 10)
-    add_child(_hand_container)
+    var wrap := CenterContainer.new()
+    wrap.position = Vector2(0, STAGE_H - CARD_H - 14)
+    wrap.size = Vector2(STAGE_W, CARD_H)
+    wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    wrap.modulate = Color(1, 1, 1, 0.88)
+    add_child(wrap)
 
+    _hand_container = HBoxContainer.new()
+    _hand_container.add_theme_constant_override("separation", CARD_GAP)
+    wrap.add_child(_hand_container)
+
+
+# ------------------------------------------------------------
+# 턴 종료
+# ------------------------------------------------------------
 
 func _build_end_turn() -> void:
     _end_turn_button = Button.new()
     _end_turn_button.text = "턴 종료"
-    _end_turn_button.position = Vector2(1100, 485)
-    _end_turn_button.custom_minimum_size = Vector2(140, 48)
+    _end_turn_button.custom_minimum_size = Vector2(140, 44)
+    _end_turn_button.position = Vector2(STAGE_W - 30 - 140, STAGE_H - 90 - 44)
+    _end_turn_button.add_theme_font_size_override("font_size", 14)
+    _end_turn_button.add_theme_color_override("font_color", COL_GOLD)
+    _end_turn_button.add_theme_color_override("font_hover_color", COL_GOLD)
+    _end_turn_button.add_theme_color_override("font_pressed_color", COL_GOLD)
+    _end_turn_button.focus_mode = Control.FOCUS_NONE
+
+    var normal := _make_panel_style(COL_END_TURN_BG, COL_END_TURN_BORDER, 4, 2)
+    var hover := normal.duplicate() as StyleBoxFlat
+    hover.bg_color = COL_END_TURN_BG.lightened(0.12)
+    _end_turn_button.add_theme_stylebox_override("normal", normal)
+    _end_turn_button.add_theme_stylebox_override("hover", hover)
+    _end_turn_button.add_theme_stylebox_override("pressed", normal)
+    _end_turn_button.add_theme_stylebox_override("disabled", normal)
     _end_turn_button.pressed.connect(_on_end_turn_pressed)
     add_child(_end_turn_button)
 
 
 func _build_log() -> void:
     _log_label = Label.new()
-    _log_label.position = Vector2(300, 490)
-    _log_label.size = Vector2(760, 40)
+    _log_label.position = Vector2(260, 498)
+    _log_label.size = Vector2(760, 24)
     _log_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    _log_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    _log_label.add_theme_font_size_override("font_size", 14)
+    _log_label.add_theme_font_size_override("font_size", 13)
+    _log_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
+    _log_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+    _log_label.add_theme_constant_override("shadow_offset_x", 1)
+    _log_label.add_theme_constant_override("shadow_offset_y", 1)
+    _log_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(_log_label)
 
 
 # ============================================================
-# BattleManager 시그널 구독
+# 시그널 구독 · 핸들러
 # ============================================================
 
 func _connect_signals() -> void:
@@ -282,27 +571,19 @@ func _connect_signals() -> void:
     BattleManager.play_failed.connect(_on_play_failed)
 
 
-# ============================================================
-# run_ui 에서 호출 (phase "combat" 진입 시)
-# ============================================================
-
 func begin_combat() -> void:
     _log_label.text = ""
     _end_turn_button.disabled = false
     _refresh_from_snapshot()
 
 
-# ============================================================
-# 시그널 핸들러
-# ============================================================
-
 func _on_battle_state_changed() -> void:
     _refresh_from_snapshot()
 
 
 func _on_damage_dealt(amount: int) -> void:
-    _player_sprite.play("attack")
-    _append_log("적에게 %d 피해" % amount)
+    _heroine_sprite.play("attack")
+    _append_log("적에게 %d 데미지" % amount)
 
 
 func _on_block_added(side: String, amount: int) -> void:
@@ -310,7 +591,7 @@ func _on_block_added(side: String, amount: int) -> void:
 
 
 func _on_block_absorbed(side: String, amount: int) -> void:
-    _append_log("%s 블록이 피해 %d 흡수" % [_side_kor(side), amount])
+    _append_log("%s 블록이 %d 흡수" % [_side_kor(side), amount])
 
 
 func _on_body_damaged(amount: int) -> void:
@@ -318,7 +599,7 @@ func _on_body_damaged(amount: int) -> void:
 
 
 func _on_arm_self_damaged(side: String, amount: int) -> void:
-    _append_log("%s 자해 -%d" % [_side_kor(side), amount])
+    _append_log("%s 반동 -%d" % [_side_kor(side), amount])
 
 
 func _on_arm_destroyed(side: String) -> void:
@@ -327,10 +608,9 @@ func _on_arm_destroyed(side: String) -> void:
 
 func _on_battle_ended(result: String) -> void:
     _end_turn_button.disabled = true
-    for btn in _card_buttons:
-        btn.disabled = true
-    var msg: String = ("승리" if result == "victory" else "패배")
-    _append_log("전투 종료 — %s" % msg)
+    for root in _card_roots:
+        root.disabled = true
+    _append_log("전투 종료 — %s" % ("승리" if result == "victory" else "패배"))
 
 
 func _on_play_failed(reason: String) -> void:
@@ -341,20 +621,16 @@ func _on_play_failed(reason: String) -> void:
             _append_log("사용 불가 (%s)" % reason)
 
 
-func _on_player_anim_finished() -> void:
-    _player_sprite.play("idle")
+func _on_heroine_anim_finished() -> void:
+    _heroine_sprite.play("idle")
 
-
-# ============================================================
-# 입력 핸들러
-# ============================================================
 
 func _on_end_turn_pressed() -> void:
     BattleManager.end_turn()
 
 
-func _on_card_pressed(hand_idx: int) -> void:
-    BattleManager.play_card(hand_idx)
+func _on_card_pressed(idx: int) -> void:
+    BattleManager.play_card(idx)
 
 
 # ============================================================
@@ -366,100 +642,245 @@ func _refresh_from_snapshot() -> void:
     if snap.is_empty():
         return
     _refresh_hud(snap)
-    _refresh_arms(snap)
-    _refresh_enemy(snap)
     _refresh_hand(snap)
 
 
 func _refresh_hud(snap: Dictionary) -> void:
     _body_hp_bar.max_value = max(1, snap.body_max_hp)
     _body_hp_bar.value = snap.body_hp
-    _body_hp_label.text = "HP %d / %d" % [snap.body_hp, snap.body_max_hp]
-    _energy_label.text = "에너지 %d" % snap.energy
-    _turn_label.text = "TURN %d" % snap.turn
-    _deck_label.text = "덱 %d  |  버림 %d  |  손 %d" % [snap.deck_size, snap.discard_size, snap.hand_size]
+    _body_hp_num.text = "%d / %d" % [snap.body_hp, snap.body_max_hp]
 
-
-func _refresh_arms(snap: Dictionary) -> void:
     _refresh_arm("L", snap.arm_l_hp, snap.arm_l_max_hp, snap.arm_l_alive, snap.block_l)
     _refresh_arm("R", snap.arm_r_hp, snap.arm_r_max_hp, snap.arm_r_alive, snap.block_r)
 
+    _energy_label.text = "%d" % snap.energy
+    var max_energy: int = GameData.BATTLE_RULES.energy_per_arm * 2
+    _energy_max_label.text = "/ %d" % max_energy
+    _turn_number_label.text = "%d" % snap.turn
+
+    _enemy_name_label.text = snap.enemy_name
+    _enemy_level_label.text = ""   # TODO: 노드/층 정보 연결
+    _enemy_hp_bar.max_value = max(1, snap.enemy_max_hp)
+    _enemy_hp_bar.value = snap.enemy_hp
+    _enemy_hp_num.text = "HP %d / %d" % [snap.enemy_hp, snap.enemy_max_hp]
+    if snap.enemy_hp > 0:
+        _enemy_intent_label.text = "다음 공격 %d" % snap.next_intent
+        _enemy_intent_icon.visible = true
+    else:
+        _enemy_intent_label.text = ""
+        _enemy_intent_icon.visible = false
+
+    _deck_count_num.text = "%d" % snap.deck_size
+    _discard_count_num.text = "%d" % snap.discard_size
+    _hand_count_num.text = "%d" % snap.hand_size
+
 
 func _refresh_arm(side: String, hp: int, max_hp: int, alive: bool, block: int) -> void:
-    var bar: ProgressBar = (_arm_l_hp_bar if side == "L" else _arm_r_hp_bar)
-    var hp_lbl: Label = (_arm_l_hp_label if side == "L" else _arm_r_hp_label)
-    var blk_lbl: Label = (_arm_l_block_label if side == "L" else _arm_r_block_label)
+    var bar: ProgressBar = _arm_l_bar if side == "L" else _arm_r_bar
+    var num: Label = _arm_l_hp_num if side == "L" else _arm_r_hp_num
+    var blk_box: HBoxContainer = _arm_l_block_box if side == "L" else _arm_r_block_box
+    var blk_lbl: Label = _arm_l_block_label if side == "L" else _arm_r_block_label
 
     bar.max_value = max(1, max_hp)
     bar.value = hp
-
     if max_hp == 0:
-        hp_lbl.text = "(빈 슬롯)"
+        num.text = "(빈)"
     elif alive:
-        hp_lbl.text = "HP %d / %d" % [hp, max_hp]
+        num.text = "%d / %d" % [hp, max_hp]
     else:
-        hp_lbl.text = "파괴됨"
+        num.text = "파괴"
 
-    blk_lbl.text = ("블록 %d" % block) if block > 0 else ""
-
-
-func _refresh_enemy(snap: Dictionary) -> void:
-    _enemy_name_label.text = snap.enemy_name
-    _enemy_hp_bar.max_value = max(1, snap.enemy_max_hp)
-    _enemy_hp_bar.value = snap.enemy_hp
-    _enemy_hp_label.text = "HP %d / %d" % [snap.enemy_hp, snap.enemy_max_hp]
-
-    if snap.enemy_hp > 0:
-        _enemy_intent_label.text = "다음 공격: %d" % snap.next_intent
+    if block > 0:
+        blk_box.visible = true
+        blk_lbl.text = "%d" % block
     else:
-        _enemy_intent_label.text = ""
+        blk_box.visible = false
 
 
 func _refresh_hand(snap: Dictionary) -> void:
-    for btn in _card_buttons:
-        btn.queue_free()
-    _card_buttons.clear()
+    for root in _card_roots:
+        root.queue_free()
+    _card_roots.clear()
 
     var hand: Array = snap.hand
     for i in range(hand.size()):
-        var card_inst: Dictionary = hand[i]
-        var btn: Button = _make_card_button(i, card_inst, snap.energy)
-        _hand_container.add_child(btn)
-        _card_buttons.append(btn)
+        var inst: Dictionary = hand[i]
+        var root: Button = _make_card_view(i, inst, snap.energy)
+        _hand_container.add_child(root)
+        _card_roots.append(root)
 
 
-func _make_card_button(idx: int, card_inst: Dictionary, energy: int) -> Button:
+func _make_card_view(idx: int, card_inst: Dictionary, energy: int) -> Button:
     var card_def: Dictionary = GameData.CARD_TEMPLATES[card_inst.card_id]
     var preview: Dictionary = BattleManager.get_card_preview(idx)
-
-    var btn := Button.new()
-    btn.custom_minimum_size = CARD_SIZE
-
+    var category: String = card_def.get("category", "attack")
     var side: String = card_inst.arm_side
-    btn.modulate = (CARD_COLOR_L if side == "L" else CARD_COLOR_R)
+    var affordable: bool = card_def.cost <= energy
 
-    var lines: Array = []
-    lines.append("%s [%s]" % [card_def.name, side])
-    lines.append("코스트 %d" % card_def.cost)
-    for eff in preview.get("effects", []):
-        match eff.type:
+    var root := Button.new()
+    root.custom_minimum_size = Vector2(CARD_W, CARD_H)
+    root.focus_mode = Control.FOCUS_NONE
+    root.clip_contents = false
+
+    var bg_col := COL_ATK_BG if category == "attack" else COL_DEF_BG
+    var border_col := COL_ATK_BORDER if category == "attack" else COL_DEF_BORDER
+
+    var normal := _make_panel_style(bg_col, border_col, 10, 2)
+    var hover := normal.duplicate() as StyleBoxFlat
+    hover.bg_color = bg_col.lightened(0.1)
+    root.add_theme_stylebox_override("normal", normal)
+    root.add_theme_stylebox_override("hover", hover)
+    root.add_theme_stylebox_override("pressed", hover)
+    root.add_theme_stylebox_override("disabled", normal)
+    root.add_theme_stylebox_override("focus", normal)
+
+    root.disabled = not affordable
+    if not affordable:
+        root.modulate = Color(1, 1, 1, 0.55)
+
+    root.pressed.connect(_on_card_pressed.bind(idx))
+
+    # 내부 컨테이너 (mouse_filter ignore — 자식이 버튼 클릭 영역을 가리지 않게)
+    var inner := Control.new()
+    inner.position = Vector2.ZERO
+    inner.size = Vector2(CARD_W, CARD_H)
+    inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    root.add_child(inner)
+
+    # 코스트 구슬 (좌상단 외측)
+    var orb := Panel.new()
+    orb.position = Vector2(-8, -8)
+    orb.size = Vector2(32, 32)
+    orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var orb_style := StyleBoxFlat.new()
+    orb_style.bg_color = COL_ENERGY
+    orb_style.border_width_left = 2
+    orb_style.border_width_right = 2
+    orb_style.border_width_top = 2
+    orb_style.border_width_bottom = 2
+    orb_style.border_color = Color(1, 1, 1, 0.9)
+    orb_style.corner_radius_top_left = 16
+    orb_style.corner_radius_top_right = 16
+    orb_style.corner_radius_bottom_left = 16
+    orb_style.corner_radius_bottom_right = 16
+    orb.add_theme_stylebox_override("panel", orb_style)
+    inner.add_child(orb)
+
+    var cost_lbl := _make_label("%d" % card_def.cost, 14, Color.WHITE)
+    cost_lbl.position = Vector2(0, 0)
+    cost_lbl.size = Vector2(32, 32)
+    cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    cost_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    cost_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    orb.add_child(cost_lbl)
+
+    # 슬롯 뱃지 (우상단)
+    var slot_col := Color(0.47, 0.71, 1.0) if side == "L" else Color(1.0, 0.55, 0.47)
+    var slot_lbl := _make_label(side, 13, slot_col)
+    slot_lbl.position = Vector2(CARD_W - 20, 6)
+    slot_lbl.size = Vector2(16, 18)
+    slot_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    slot_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    inner.add_child(slot_lbl)
+
+    # 이름
+    var name_lbl := _make_label(card_def.name, 14, Color.WHITE)
+    name_lbl.position = Vector2(10, 26)
+    name_lbl.size = Vector2(CARD_W - 20, 20)
+    name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    inner.add_child(name_lbl)
+
+    # 아트 플레이스홀더
+    var art := Panel.new()
+    art.position = Vector2(10, 52)
+    art.size = Vector2(CARD_W - 20, 82)
+    art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art.add_theme_stylebox_override(
+        "panel", _make_panel_style(COL_CARD_ART_BG, Color.TRANSPARENT, 4))
+    inner.add_child(art)
+
+    var art_lbl := _make_label("art", 11, Color(1, 1, 1, 0.28))
+    art_lbl.position = Vector2(0, 0)
+    art_lbl.size = art.size
+    art_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    art_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    art_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art.add_child(art_lbl)
+
+    # 효과 텍스트
+    var eff_box := VBoxContainer.new()
+    eff_box.position = Vector2(10, 140)
+    eff_box.size = Vector2(CARD_W - 20, 34)
+    eff_box.add_theme_constant_override("separation", 1)
+    eff_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    inner.add_child(eff_box)
+
+    var p_effects: Array = preview.get("effects", [])
+    for eff in p_effects:
+        var t: String = eff.type
+        var v: int = eff.final_value
+        var txt: String = ""
+        var col: Color = Color.WHITE
+        var fs: int = 11
+        match t:
             "deal_damage":
-                lines.append("딜 %d" % eff.final_value)
+                txt = "데미지 %d" % v
+                col = COL_CARD_DMG
             "transfer_block":
-                lines.append("블록 %d" % eff.final_value)
+                txt = "블록 %d" % v
+                col = COL_CARD_BLK
             "damage_own_arm":
-                lines.append("자해 %d" % eff.final_value)
-    btn.text = "\n".join(lines)
-    btn.add_theme_font_size_override("font_size", 12)
+                txt = "반동 -%d" % v
+                col = COL_CARD_SELF
+                fs = 10
+        if txt == "":
+            continue
+        var lbl := _make_label(txt, fs, col)
+        lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        eff_box.add_child(lbl)
 
-    btn.disabled = (card_def.cost > energy)
-    btn.pressed.connect(_on_card_pressed.bind(idx))
-    return btn
+    return root
 
 
 # ============================================================
-# 로그 · 유틸
+# 공용 유틸
 # ============================================================
+
+func _make_label(text: String, fs: int, col: Color) -> Label:
+    var l := Label.new()
+    l.text = text
+    l.add_theme_font_size_override("font_size", fs)
+    l.add_theme_color_override("font_color", col)
+    return l
+
+
+func _make_hp_bar(fg: Color, border: Color, bar_size: Vector2) -> ProgressBar:
+    var pb := ProgressBar.new()
+    pb.show_percentage = false
+    pb.custom_minimum_size = bar_size
+    pb.add_theme_stylebox_override("background", _make_panel_style(COL_BAR_BG, border, 2, 1))
+    pb.add_theme_stylebox_override("fill", _make_panel_style(fg, Color.TRANSPARENT, 2))
+    return pb
+
+
+func _make_panel_style(bg: Color, border: Color, radius: int = 2, border_width: int = 1) -> StyleBoxFlat:
+    var s := StyleBoxFlat.new()
+    s.bg_color = bg
+    if border.a > 0.0:
+        s.border_width_left = border_width
+        s.border_width_right = border_width
+        s.border_width_top = border_width
+        s.border_width_bottom = border_width
+        s.border_color = border
+    if radius > 0:
+        s.corner_radius_top_left = radius
+        s.corner_radius_top_right = radius
+        s.corner_radius_bottom_left = radius
+        s.corner_radius_bottom_right = radius
+    return s
+
 
 func _append_log(msg: String) -> void:
     _log_label.text = msg

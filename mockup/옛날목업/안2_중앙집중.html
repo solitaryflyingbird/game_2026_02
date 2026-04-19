@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>안2 - 중앙 집중형</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; display: flex; justify-content: center; align-items: center; height: 100vh; }
+.screen {
+    width: 1280px; height: 720px; background: #0d1117;
+    position: relative; overflow: hidden; border: 2px solid #444;
+}
+
+/* 스캔라인 효과 */
+.screen::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px);
+}
+
+/* 상단: 적 영역 */
+.enemy-row {
+    position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 32px;
+}
+.enemy-card {
+    width: 180px; background: rgba(255,50,50,0.08);
+    border: 1px solid rgba(255,50,50,0.3); border-radius: 12px;
+    padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.enemy-card-sprite {
+    width: 140px; height: 120px; background: #1a1015;
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    color: #e74c3c; font: 13px monospace;
+}
+.enemy-card-name { color: #ff6b6b; font: bold 14px monospace; }
+.enemy-card-hp-wrap {
+    width: 100%; height: 6px; background: #222; border-radius: 3px; overflow: hidden;
+}
+.enemy-card-hp { height: 100%; background: #e74c3c; border-radius: 3px; }
+.enemy-card-hp-text { color: #888; font: 11px monospace; }
+.enemy-card-intent {
+    background: #2a1520; border: 1px solid #e74c3c; border-radius: 6px;
+    padding: 3px 12px; color: #ff4444; font: bold 13px monospace;
+    display: flex; align-items: center; gap: 6px;
+}
+
+/* 중앙: 플레이어 + 상태 */
+.center-area {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    display: flex; align-items: center; gap: 48px;
+}
+.player-sprite {
+    width: 180px; height: 220px; background: #121828;
+    border: 2px solid #0ff; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    color: #0ff; font: 14px monospace;
+    box-shadow: 0 0 30px rgba(0,255,255,0.1);
+}
+.status-panel {
+    display: flex; flex-direction: column; gap: 12px;
+}
+.status-row {
+    display: flex; align-items: center; gap: 12px;
+}
+.status-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font: bold 14px monospace;
+}
+.status-bar-wrap {
+    width: 200px; height: 20px; background: #1a1a2e;
+    border-radius: 4px; overflow: hidden; position: relative;
+    border: 1px solid #333;
+}
+.status-bar { height: 100%; border-radius: 4px; }
+.status-text {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; color: white; font: bold 11px monospace;
+}
+.hp-icon { background: #c0392b; color: white; }
+.hp-fill { background: linear-gradient(90deg, #c0392b, #e74c3c); width: 80%; }
+.shield-icon { background: #2980b9; color: white; }
+.shield-fill { background: linear-gradient(90deg, #1a5276, #2980b9); width: 20%; }
+.boost-badge {
+    background: #b7950b; color: #1a1a2e; padding: 4px 16px;
+    border-radius: 6px; font: bold 14px monospace;
+}
+.floor-turn {
+    color: #555; font: 12px monospace; text-align: center;
+}
+
+/* 하단: 카드 + 콤보 존 */
+.bottom-area {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 260px;
+    background: linear-gradient(0deg, rgba(0,0,0,0.8), transparent);
+}
+.combo-zone {
+    position: absolute; bottom: 180px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 12px; align-items: center;
+}
+.combo-slot {
+    width: 80px; height: 100px; border: 2px dashed rgba(255,255,255,0.2);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.2); font: 12px monospace;
+}
+.combo-slot.filled {
+    border-style: solid; border-color: #0ff;
+    background: rgba(0,255,255,0.05); color: #0ff;
+}
+.combo-arrow { color: #555; font: 24px; }
+.combo-result {
+    background: rgba(0,255,255,0.1); border: 1px solid #0ff;
+    border-radius: 8px; padding: 8px 16px; color: #0ff;
+    font: bold 14px monospace;
+}
+.card-area {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 12px;
+}
+.card {
+    width: 110px; height: 140px; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 6px; cursor: pointer;
+    transition: transform 0.2s; border: 2px solid rgba(255,255,255,0.2);
+}
+.card:hover { transform: translateY(-12px); }
+.card.selected { transform: translateY(-16px); border-color: white; }
+.card-atk { background: linear-gradient(135deg, #8e1a1a, #c0392b); }
+.card-blk { background: linear-gradient(135deg, #14384f, #2471a3); }
+.card-bst { background: linear-gradient(135deg, #7d6608, #d4ac0d); }
+.card-hel { background: linear-gradient(135deg, #145a32, #1e8449); }
+.card-type { color: rgba(255,255,255,0.7); font: bold 12px monospace; }
+.card-value { color: white; font: bold 36px monospace; }
+
+.confirm-btn {
+    position: absolute; bottom: 175px; right: 120px;
+    background: #0ff; color: #0d1117; border: none; padding: 10px 32px;
+    font: bold 14px monospace; border-radius: 6px; cursor: pointer;
+}
+</style>
+</head>
+<body>
+<div class="screen">
+    <!-- 적 -->
+    <div class="enemy-row">
+        <div class="enemy-card">
+            <div class="enemy-card-sprite">강습 드론</div>
+            <span class="enemy-card-name">강습 드론</span>
+            <div class="enemy-card-hp-wrap"><div class="enemy-card-hp" style="width:65%"></div></div>
+            <span class="enemy-card-hp-text">HP 13/20</span>
+            <div class="enemy-card-intent">ATK 4</div>
+        </div>
+        <div class="enemy-card">
+            <div class="enemy-card-sprite">정찰 드론</div>
+            <span class="enemy-card-name">정찰 드론</span>
+            <div class="enemy-card-hp-wrap"><div class="enemy-card-hp" style="width:40%"></div></div>
+            <span class="enemy-card-hp-text">HP 6/15</span>
+            <div class="enemy-card-intent">ATK 5</div>
+        </div>
+    </div>
+
+    <!-- 중앙 -->
+    <div class="center-area">
+        <div class="player-sprite">주인공<br>스프라이트</div>
+        <div class="status-panel">
+            <div class="floor-turn">FLOOR 04 | TURN 3</div>
+            <div class="status-row">
+                <div class="status-icon hp-icon">HP</div>
+                <div class="status-bar-wrap">
+                    <div class="status-bar hp-fill"></div>
+                    <div class="status-text">24 / 30</div>
+                </div>
+            </div>
+            <div class="status-row">
+                <div class="status-icon shield-icon">SH</div>
+                <div class="status-bar-wrap">
+                    <div class="status-bar shield-fill"></div>
+                    <div class="status-text">3</div>
+                </div>
+            </div>
+            <div class="status-row">
+                <span class="boost-badge">BOOST x1</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 콤보 존 -->
+    <div class="bottom-area">
+        <div class="combo-zone">
+            <div class="combo-slot filled">ATK<br>2</div>
+            <div class="combo-slot filled">ATK<br>1</div>
+            <div class="combo-slot filled">ATK<br>1</div>
+            <span class="combo-arrow">=</span>
+            <div class="combo-result">ATK 4</div>
+        </div>
+        <button class="confirm-btn">확정</button>
+
+        <!-- 카드 -->
+        <div class="card-area">
+            <div class="card card-atk selected"><span class="card-type">ATK</span><span class="card-value">2</span></div>
+            <div class="card card-blk"><span class="card-type">BLK</span><span class="card-value">1</span></div>
+            <div class="card card-atk selected"><span class="card-type">ATK</span><span class="card-value">1</span></div>
+            <div class="card card-hel"><span class="card-type">HEL</span><span class="card-value">2</span></div>
+            <div class="card card-atk selected"><span class="card-type">ATK</span><span class="card-value">1</span></div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

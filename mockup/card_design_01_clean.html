@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Card Design 01 — Clean</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    background: #0a0a12;
+    font-family: "Apple SD Gothic Neo", -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #eaeef7;
+}
+.stage {
+    width: 1280px;
+    height: 720px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8);
+    background: linear-gradient(180deg, #161824 0%, #0a0c14 100%);
+}
+.stage::before {
+    content: "";
+    position: absolute; inset: 0;
+    background-image:
+        radial-gradient(circle at 30% 40%, rgba(80,130,200,0.18), transparent 50%),
+        radial-gradient(circle at 70% 60%, rgba(180,80,80,0.12), transparent 50%);
+}
+.label {
+    position: absolute; top: 18px; right: 22px;
+    font-size: 10px; letter-spacing: 0.2em;
+    color: rgba(200,210,230,0.5);
+    z-index: 100;
+}
+
+.title-bar {
+    position: absolute; top: 22px; left: 24px;
+    z-index: 50;
+    font-size: 14px; color: #c0d5e8;
+    letter-spacing: 0.05em;
+}
+.title-bar small { font-size: 11px; color: #6a85a0; display: block; margin-top: 2px; }
+
+/* === 큰 메인 카드 (Detail view) === */
+.feature {
+    position: absolute;
+    top: 80px; left: 80px;
+    width: 280px; height: 380px;
+}
+
+/* === 카드 공통 — 기준 크기 280×380 (모든 내부 값은 이 크기 기준) === */
+.card {
+    position: relative;
+    border-radius: 14px;
+    transition: transform .18s;
+    cursor: pointer;
+}
+.card .body {
+    position: absolute; inset: 0;
+    border-radius: 14px;
+    backdrop-filter: blur(2px);
+}
+.card.atk .body { background: linear-gradient(180deg, rgba(140,42,58,0.78), rgba(54,18,32,0.85)); }
+.card.def .body { background: linear-gradient(180deg, rgba(48,98,162,0.78), rgba(20,40,72,0.85)); }
+.card .border {
+    position: absolute; inset: 0;
+    border-radius: 14px;
+    border: 2px solid;
+    pointer-events: none;
+}
+.card.atk .border { border-color: #d56575; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+.card.def .border { border-color: #5a96cf; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+
+/* 코스트 구슬 */
+.card .cost {
+    position: absolute;
+    top: -12px; left: -12px;
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 30% 30%, #b9e4ff, #2a6bb1 60%, #154480 100%);
+    border: 3px solid #fff;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.6), 0 0 14px rgba(120,180,255,0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 5;
+}
+.card .cost .num {
+    font-size: 26px; font-weight: 900; color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+    line-height: 1;
+}
+
+/* 슬롯 마크 */
+.card .slot {
+    position: absolute;
+    top: 18px; right: 22px;
+    font-size: 22px; font-weight: 800;
+    letter-spacing: 0.08em;
+    z-index: 5;
+}
+.card.L .slot { color: #8ec1ff; text-shadow: 0 0 8px rgba(120,180,255,0.5); }
+.card.R .slot { color: #ffaf90; text-shadow: 0 0 8px rgba(255,140,120,0.5); }
+
+/* 제목 */
+.card .title {
+    position: absolute;
+    top: 22px; left: 64px; right: 50px;
+    text-align: center;
+    font-size: 22px; font-weight: 800;
+    color: #fff;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    word-break: keep-all;
+    overflow-wrap: normal;
+    z-index: 4;
+}
+
+/* 일러스트 영역 */
+.card .art {
+    position: absolute;
+    top: 88px; left: 18px; right: 18px; bottom: 76px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.07);
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.18);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+}
+
+/* 효과 텍스트 */
+.card .effects {
+    position: absolute;
+    left: 18px; right: 18px; bottom: 16px;
+    text-align: center;
+    font-size: 17px; font-weight: 700;
+    line-height: 1.3;
+    z-index: 4;
+}
+.card .effects .dmg { color: #ffb3a8; }
+.card .effects .blk { color: #aacef8; }
+.card .effects .self { color: #d8a4b0; font-size: 14px; font-weight: 600; }
+
+/* feature: 기준 크기 그대로 (자연 크기) */
+.feature .card { width: 100%; height: 100%; }
+
+/* === 옆 설명 === */
+.callouts {
+    position: absolute;
+    top: 80px; left: 400px;
+    width: 460px;
+    color: #c0d0e0;
+    font-size: 13px;
+    line-height: 1.6;
+}
+.callouts h3 {
+    font-size: 16px;
+    color: #ffd88a;
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
+}
+.callouts .row {
+    display: flex; gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px dashed rgba(180,200,230,0.15);
+}
+.callouts .row .marker {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    background: rgba(120,180,255,0.18);
+    border: 1px solid rgba(120,180,255,0.5);
+    color: #7ebff0;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.callouts .row .text { flex: 1; }
+.callouts .row .text strong { color: #fff; }
+
+/* === 로컬라이징 프리뷰 — 기계적 축소 (transform:scale) === */
+.locale-row {
+    position: absolute;
+    bottom: 30px;
+    left: 50%; transform: translateX(-50%);
+    display: flex; gap: 40px;
+    z-index: 10;
+}
+.locale-group {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.locale-group .tag {
+    font-size: 10px; letter-spacing: 0.3em;
+    color: rgba(180,200,230,0.55);
+    font-family: "SF Mono", Menlo, monospace;
+}
+
+/* 축소 래퍼 — 실제 레이아웃 크기 138×188, 내부 카드는 280×380을 scale(0.494)로 축소 */
+.locale-group .card-wrap {
+    width: 138px;
+    height: 188px;
+    position: relative;
+    overflow: visible;
+}
+.locale-group .card-wrap .card {
+    width: 280px;
+    height: 380px;
+    position: absolute;
+    top: 0; left: 0;
+    transform: scale(0.494);
+    transform-origin: top left;
+}
+
+/* CJK 전용 폰트 보정 — 축소 후 가독성 확보 (기계적 축소 기준에서 폰트만 살짝 키움) */
+.locale-group.cjk .card .title { font-size: 28px; }
+.locale-group.cjk .card .effects { font-size: 22px; }
+.locale-group.cjk .card .effects .self { font-size: 18px; }
+
+.locale-row-title {
+    position: absolute;
+    bottom: 252px;
+    left: 50%; transform: translateX(-50%);
+    font-size: 10px; letter-spacing: 0.3em;
+    color: rgba(180,200,230,0.4);
+}
+</style>
+</head>
+<body>
+<div class="stage">
+    <div class="label">CARD DESIGN 01 · CLEAN</div>
+    <div class="title-bar">카드 프레임 디자인 안 1
+        <small>· 본체 반투명 · 테두리/일러스트/코스트 폰트 불투명 · 축소판은 기계적 scale()</small>
+    </div>
+
+    <!-- 큰 디테일 카드 -->
+    <div class="feature">
+        <div class="card def L">
+            <div class="body"></div>
+            <div class="border"></div>
+            <div class="cost"><span class="num">4</span></div>
+            <div class="slot">L</div>
+            <div class="title">강 가 드</div>
+            <div class="art">ILLUSTRATION</div>
+            <div class="effects">
+                <span class="blk">블록 160</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 옆 설명 -->
+    <div class="callouts">
+        <h3>구성 요소</h3>
+        <div class="row">
+            <div class="marker">①</div>
+            <div class="text"><strong>코스트 구슬</strong> (좌상단, 외곽 흰 라인 · 그라데이션 구). 카드 외곽 살짝 침범 — 제목과 분리</div>
+        </div>
+        <div class="row">
+            <div class="marker">②</div>
+            <div class="text"><strong>슬롯 마크</strong> (우상단, L/R/any). 색조로 좌·우 구분</div>
+        </div>
+        <div class="row">
+            <div class="marker">③</div>
+            <div class="text"><strong>제목</strong> 중앙 정렬, 자간 여유. <strong>2줄 가능</strong> — 알파벳 계통 길이 흡수</div>
+        </div>
+        <div class="row">
+            <div class="marker">④</div>
+            <div class="text"><strong>일러스트 영역</strong> · 렌더 244×216 · <strong>에셋 기준 2배(488×432)</strong> 제작
+                <br><span style="color:#ffb070">※ 현재 미구현 — 플레이스홀더만 표시</span></div>
+        </div>
+        <div class="row">
+            <div class="marker">⑤</div>
+            <div class="text"><strong>효과 텍스트</strong> 하단 중앙 (데미지·블록·반동 한 줄에)</div>
+        </div>
+        <div class="row">
+            <div class="marker">⑥</div>
+            <div class="text"><strong>본체 반투명</strong> ⇄ 핵심 요소(테두리·일러스트·코스트 폰트) 불투명</div>
+        </div>
+    </div>
+
+    <!-- 로컬라이징 프리뷰 -->
+    <div class="locale-row-title">LOCALIZATION PREVIEW · 강펀치 (ATK, L-slot) · 기계적 축소 scale(0.494)</div>
+    <div class="locale-row">
+        <div class="locale-group cjk">
+            <div class="tag">KR</div>
+            <div class="card-wrap">
+                <div class="card atk L">
+                    <div class="body"></div><div class="border"></div>
+                    <div class="cost"><span class="num">4</span></div>
+                    <div class="slot">L</div>
+                    <div class="title">강펀치</div>
+                    <div class="art">ILLUSTRATION</div>
+                    <div class="effects">
+                        <span class="dmg">데미지 40</span><br>
+                        <span class="self">반동 -20</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="locale-group">
+            <div class="tag">EN</div>
+            <div class="card-wrap">
+                <div class="card atk L">
+                    <div class="body"></div><div class="border"></div>
+                    <div class="cost"><span class="num">4</span></div>
+                    <div class="slot">L</div>
+                    <div class="title">Heavy Punch</div>
+                    <div class="art">ILLUSTRATION</div>
+                    <div class="effects">
+                        <span class="dmg">Damage 40</span><br>
+                        <span class="self">Recoil -20</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="locale-group cjk">
+            <div class="tag">JP</div>
+            <div class="card-wrap">
+                <div class="card atk L">
+                    <div class="body"></div><div class="border"></div>
+                    <div class="cost"><span class="num">4</span></div>
+                    <div class="slot">L</div>
+                    <div class="title">強打</div>
+                    <div class="art">ILLUSTRATION</div>
+                    <div class="effects">
+                        <span class="dmg">ダメージ 40</span><br>
+                        <span class="self">反動 -20</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="locale-group cjk">
+            <div class="tag">CN</div>
+            <div class="card-wrap">
+                <div class="card atk L">
+                    <div class="body"></div><div class="border"></div>
+                    <div class="cost"><span class="num">4</span></div>
+                    <div class="slot">L</div>
+                    <div class="title">强拳</div>
+                    <div class="art">ILLUSTRATION</div>
+                    <div class="effects">
+                        <span class="dmg">伤害 40</span><br>
+                        <span class="self">反冲 -20</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
