@@ -39,8 +39,7 @@ const HAND_TWEEN_TIME: float = 0.22       # 호버 트랜지션 시간
 const BG_TEX_PATH := "res://에셋/배틀 리소스/배경/배경1.png"
 const ENEMY_TEX_PATH := "res://에셋/배틀 리소스/예시 적/몬스터 예시.png"
 const ATTACK_ICON_RED_PATH := "res://에셋/배틀 리소스/아이콘/적_공격_아이콘_레드.png"
-const HEROINE_IDLE_DIR := "res://에셋/배틀 리소스/주인공/idle/"
-const HEROINE_ATTACK_DIR := "res://에셋/배틀 리소스/주인공/공격모션/"
+const HEROINE_FRONT_DIR := "res://에셋/타이틀/"   # 프론트뷰 idle 8프레임 (타이틀 공용)
 
 const HP_BAR_SHADER_PATH := "res://ui/hp_bar.gdshader"
 const ORB_SHADER_PATH := "res://ui/orb.gdshader"
@@ -423,30 +422,27 @@ func _make_deck_row(lbl_text: String, parent: Control) -> Label:
 # ------------------------------------------------------------
 
 func _build_heroine() -> void:
+    # 프론트뷰 — 타이틀과 동일 8프레임 idle 공유. 공격 전용 프레임은 미정이라
+    # 공격 모션은 컷씬/피격 플래시로 대체 예정.
     _heroine_sprite = AnimatedSprite2D.new()
     var frames := SpriteFrames.new()
 
     frames.add_animation("idle")
-    frames.set_animation_speed("idle", 4)
+    frames.set_animation_speed("idle", 8)
     frames.set_animation_loop("idle", true)
-    for i in range(4):
-        var f: Texture2D = load(HEROINE_IDLE_DIR + "frame_%d.png" % i)
+    for i in range(1, 9):  # 1.png ~ 8.png
+        var f: Texture2D = load(HEROINE_FRONT_DIR + "%d.png" % i)
         if f != null:
             frames.add_frame("idle", f)
-
-    frames.add_animation("attack")
-    frames.set_animation_speed("attack", 10)
-    frames.set_animation_loop("attack", false)
-    for i in range(5):
-        var f2: Texture2D = load(HEROINE_ATTACK_DIR + "frame_%d.png" % i)
-        if f2 != null:
-            frames.add_frame("attack", f2)
 
     _heroine_sprite.sprite_frames = frames
     _heroine_sprite.animation = "idle"
     _heroine_sprite.autoplay = "idle"
-    _heroine_sprite.scale = Vector2(0.42, 0.42)
-    _heroine_sprite.position = Vector2(240, 420)
+    # 에셋이 허벅지 윗부분에서 끊긴 초상화 → 그 끊긴 선이 스테이지 밖으로
+    # 나가도록 scale 키우고 pos 내림. 결과: 에셋 하단이 y≈727(스테이지 720 아래)로
+    # 화면에 보이지 않음. 얼굴은 원래 위치(≈246) 근처 유지.
+    _heroine_sprite.scale = Vector2(0.45, 0.45)
+    _heroine_sprite.position = Vector2(240, 441)
     _heroine_sprite.animation_finished.connect(_on_heroine_anim_finished)
     add_child(_heroine_sprite)
 
@@ -587,7 +583,10 @@ func _on_battle_state_changed() -> void:
 
 
 func _on_damage_dealt(amount: int) -> void:
-    _heroine_sprite.play("attack")
+    # 프론트뷰 전환 후 공격 전용 프레임 없음 — 컷씬/피격 플래시로 대체 예정
+    if _heroine_sprite.sprite_frames != null \
+            and _heroine_sprite.sprite_frames.has_animation("attack"):
+        _heroine_sprite.play("attack")
     _append_log("적에게 %d 데미지" % amount)
 
 
@@ -778,6 +777,7 @@ func _on_card_hover_enter(hit_area: Button, visual: Control, base_rot: float) ->
     tween.tween_property(visual, "rotation", -base_rot, HAND_TWEEN_TIME)
     tween.tween_property(visual, "scale", Vector2(HAND_HOVER_SCALE, HAND_HOVER_SCALE), HAND_TWEEN_TIME)
     tween.tween_property(visual, "position", Vector2(0, -HAND_HOVER_LIFT), HAND_TWEEN_TIME)
+    tween.tween_property(visual, "modulate:a", 1.0, HAND_TWEEN_TIME)
     visual.set_meta("tween", tween)
 
 
@@ -786,11 +786,13 @@ func _on_card_hover_exit(hit_area: Button, visual: Control) -> void:
         return
     hit_area.z_index = hit_area.get_meta("base_z")
     _kill_card_tween(visual)
+    var base_alpha: float = visual.get_meta("base_alpha", 0.88)
     var tween := create_tween().set_parallel(true)
     tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
     tween.tween_property(visual, "rotation", 0.0, HAND_TWEEN_TIME)
     tween.tween_property(visual, "scale", Vector2.ONE, HAND_TWEEN_TIME)
     tween.tween_property(visual, "position", Vector2.ZERO, HAND_TWEEN_TIME)
+    tween.tween_property(visual, "modulate:a", base_alpha, HAND_TWEEN_TIME)
     visual.set_meta("tween", tween)
 
 
@@ -821,8 +823,11 @@ func _make_card_view(idx: int, card_inst: Dictionary, energy: int) -> Panel:
     var border_col := COL_ATK_BORDER if category == "attack" else COL_DEF_BORDER
     visual.add_theme_stylebox_override("panel", _make_panel_style(bg_col, border_col, 10, 2))
 
-    if not affordable:
-        visual.modulate = Color(1, 1, 1, 0.55)
+    # 기본 반투명 (호버 시 불투명으로 트윈).
+    # 사용 불가(에너지 부족)일 땐 더 어둡게.
+    var base_alpha: float = 0.55 if not affordable else 0.88
+    visual.modulate = Color(1, 1, 1, base_alpha)
+    visual.set_meta("base_alpha", base_alpha)
 
     # 코스트 구슬 (좌상단 외측, 36×36 원 — HUD 마나 오브와 동일 쉐이더)
     var orb := _make_orb(Vector2(36, 36))
