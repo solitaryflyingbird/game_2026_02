@@ -713,115 +713,121 @@ func _refresh_hand(snap: Dictionary) -> void:
     var center_idx: float = float(n - 1) / 2.0
     var hand_cx: float = float(STAGE_W) / 2.0
 
+    # 히트 영역 Button용 빈 스타일 (Button 기본 렌더를 비활성화)
+    var empty_style := StyleBoxEmpty.new()
+
     for i in range(n):
         var inst: Dictionary = hand[i]
-        var card: Button = _make_card_view(i, inst, snap.energy)
-        _hand_root.add_child(card)
 
-        # 슬롯 offset (중앙 0, 가장자리 ±(n-1)/2)
+        # 슬롯 오프셋 계산
         var slot: float = float(i) - center_idx
         var base_x: float = hand_cx - float(CARD_W) / 2.0 + slot * HAND_SLOT_SPACING
         var base_y: float = float(HAND_BASELINE_Y) - float(CARD_H) + slot * slot * HAND_Y_CURVE
         var base_rot: float = deg_to_rad(slot * HAND_ROT_PER_SLOT_DEG)
-        # 슬더스식: 오른쪽 카드가 위로 (i 증가 방향으로 z 증가 → 마나구슬 가려지지 않음)
         var base_z: int = i + 1
 
-        # 회전·확대 피벗 — 카드 하단에서 80px 더 아래 (원호 형성)
-        card.pivot_offset = Vector2(float(CARD_W) / 2.0, float(CARD_H) + HAND_PIVOT_BELOW)
-        card.position = Vector2(base_x, base_y)
-        card.rotation = base_rot
-        card.z_index = base_z
+        # === 히트 영역 (Button) — 기본 위치/회전 고정. 호버 시 변형하지 않음.
+        #     덕분에 비주얼이 확대/이동해도 mouse_exited 가 튀지 않는다.
+        var hit_area := Button.new()
+        hit_area.custom_minimum_size = Vector2(CARD_W, CARD_H)
+        hit_area.size = Vector2(CARD_W, CARD_H)
+        hit_area.focus_mode = Control.FOCUS_NONE
+        hit_area.flat = true
+        hit_area.clip_contents = false
+        hit_area.add_theme_stylebox_override("normal", empty_style)
+        hit_area.add_theme_stylebox_override("hover", empty_style)
+        hit_area.add_theme_stylebox_override("pressed", empty_style)
+        hit_area.add_theme_stylebox_override("disabled", empty_style)
+        hit_area.add_theme_stylebox_override("focus", empty_style)
 
-        # 베이스 값 저장 — 호버 복원용
-        card.set_meta("base_pos", card.position)
-        card.set_meta("base_rot", base_rot)
-        card.set_meta("base_z", base_z)
+        hit_area.pivot_offset = Vector2(float(CARD_W) / 2.0, float(CARD_H) + HAND_PIVOT_BELOW)
+        hit_area.position = Vector2(base_x, base_y)
+        hit_area.rotation = base_rot
+        hit_area.z_index = base_z
+        hit_area.set_meta("base_z", base_z)
 
-        card.mouse_entered.connect(_on_card_hover_enter.bind(card))
-        card.mouse_exited.connect(_on_card_hover_exit.bind(card))
+        # === 비주얼 (Panel, hit_area 의 자식) — 호버 시 scale/rotate/translate 애니메이션
+        var visual: Panel = _make_card_view(i, inst, snap.energy)
+        visual.pivot_offset = Vector2(float(CARD_W) / 2.0, float(CARD_H) + HAND_PIVOT_BELOW)
+        visual.position = Vector2.ZERO
+        visual.rotation = 0.0
+        visual.scale = Vector2.ONE
+        hit_area.add_child(visual)
 
-        _card_roots.append(card)
+        # 카드 disabled (에너지 부족) — hit_area 단에서 처리. 비주얼은 modulate 로 표시.
+        var card_def: Dictionary = GameData.CARD_TEMPLATES[inst.card_id]
+        hit_area.disabled = card_def.cost > snap.energy
+
+        # 시그널
+        hit_area.mouse_entered.connect(_on_card_hover_enter.bind(hit_area, visual, base_rot))
+        hit_area.mouse_exited.connect(_on_card_hover_exit.bind(hit_area, visual))
+        hit_area.pressed.connect(_on_card_pressed.bind(i))
+
+        _hand_root.add_child(hit_area)
+        _card_roots.append(hit_area)
 
 
-func _on_card_hover_enter(card: Button) -> void:
-    if not is_instance_valid(card):
+func _on_card_hover_enter(hit_area: Button, visual: Control, base_rot: float) -> void:
+    if not is_instance_valid(visual) or not is_instance_valid(hit_area):
         return
-    var base_pos: Vector2 = card.get_meta("base_pos")
-    card.z_index = 100
-    _kill_card_tween(card)
+    hit_area.z_index = 100
+    _kill_card_tween(visual)
+    # visual 의 rotation = -base_rot 는 부모(hit_area) 의 회전을 상쇄 → 화면상 직립.
     var tween := create_tween().set_parallel(true)
     tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    tween.tween_property(card, "rotation", 0.0, HAND_TWEEN_TIME)
-    tween.tween_property(card, "scale", Vector2(HAND_HOVER_SCALE, HAND_HOVER_SCALE), HAND_TWEEN_TIME)
-    tween.tween_property(card, "position", base_pos + Vector2(0, -HAND_HOVER_LIFT), HAND_TWEEN_TIME)
-    card.set_meta("tween", tween)
+    tween.tween_property(visual, "rotation", -base_rot, HAND_TWEEN_TIME)
+    tween.tween_property(visual, "scale", Vector2(HAND_HOVER_SCALE, HAND_HOVER_SCALE), HAND_TWEEN_TIME)
+    tween.tween_property(visual, "position", Vector2(0, -HAND_HOVER_LIFT), HAND_TWEEN_TIME)
+    visual.set_meta("tween", tween)
 
 
-func _on_card_hover_exit(card: Button) -> void:
-    if not is_instance_valid(card):
+func _on_card_hover_exit(hit_area: Button, visual: Control) -> void:
+    if not is_instance_valid(visual) or not is_instance_valid(hit_area):
         return
-    var base_pos: Vector2 = card.get_meta("base_pos")
-    var base_rot: float = card.get_meta("base_rot")
-    var base_z: int = card.get_meta("base_z")
-    card.z_index = base_z   # 즉시 복원 (트윈 중에도 원래 스택 순서 유지)
-    _kill_card_tween(card)
+    hit_area.z_index = hit_area.get_meta("base_z")
+    _kill_card_tween(visual)
     var tween := create_tween().set_parallel(true)
     tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    tween.tween_property(card, "rotation", base_rot, HAND_TWEEN_TIME)
-    tween.tween_property(card, "scale", Vector2.ONE, HAND_TWEEN_TIME)
-    tween.tween_property(card, "position", base_pos, HAND_TWEEN_TIME)
-    card.set_meta("tween", tween)
+    tween.tween_property(visual, "rotation", 0.0, HAND_TWEEN_TIME)
+    tween.tween_property(visual, "scale", Vector2.ONE, HAND_TWEEN_TIME)
+    tween.tween_property(visual, "position", Vector2.ZERO, HAND_TWEEN_TIME)
+    visual.set_meta("tween", tween)
 
 
-func _kill_card_tween(card: Button) -> void:
-    if not card.has_meta("tween"):
+func _kill_card_tween(visual: Control) -> void:
+    if not visual.has_meta("tween"):
         return
-    var old = card.get_meta("tween")
+    var old = visual.get_meta("tween")
     if old != null and old is Tween and old.is_valid():
         old.kill()
 
 
-func _make_card_view(idx: int, card_inst: Dictionary, energy: int) -> Button:
+func _make_card_view(idx: int, card_inst: Dictionary, energy: int) -> Panel:
+    # 비주얼 레이어만 만듦 — 클릭/호버는 부모(hit_area Button)가 담당.
+    # 이 함수가 반환하는 Panel 은 mouse_filter IGNORE 이며, 호버 시 scale/rotate/translate 된다.
     var card_def: Dictionary = GameData.CARD_TEMPLATES[card_inst.card_id]
     var preview: Dictionary = BattleManager.get_card_preview(idx)
     var category: String = card_def.get("category", "attack")
     var side: String = card_inst.arm_side
     var affordable: bool = card_def.cost <= energy
 
-    var root := Button.new()
-    root.custom_minimum_size = Vector2(CARD_W, CARD_H)
-    root.focus_mode = Control.FOCUS_NONE
-    root.clip_contents = false
+    var visual := Panel.new()
+    visual.custom_minimum_size = Vector2(CARD_W, CARD_H)
+    visual.size = Vector2(CARD_W, CARD_H)
+    visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    visual.clip_contents = false
 
     var bg_col := COL_ATK_BG if category == "attack" else COL_DEF_BG
     var border_col := COL_ATK_BORDER if category == "attack" else COL_DEF_BORDER
+    visual.add_theme_stylebox_override("panel", _make_panel_style(bg_col, border_col, 10, 2))
 
-    var normal := _make_panel_style(bg_col, border_col, 10, 2)
-    var hover := normal.duplicate() as StyleBoxFlat
-    hover.bg_color = bg_col.lightened(0.1)
-    root.add_theme_stylebox_override("normal", normal)
-    root.add_theme_stylebox_override("hover", hover)
-    root.add_theme_stylebox_override("pressed", hover)
-    root.add_theme_stylebox_override("disabled", normal)
-    root.add_theme_stylebox_override("focus", normal)
-
-    root.disabled = not affordable
     if not affordable:
-        root.modulate = Color(1, 1, 1, 0.55)
-
-    root.pressed.connect(_on_card_pressed.bind(idx))
-
-    # 내부 컨테이너 (mouse_filter ignore — 자식이 버튼 클릭 영역을 가리지 않게)
-    var inner := Control.new()
-    inner.position = Vector2.ZERO
-    inner.size = Vector2(CARD_W, CARD_H)
-    inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    root.add_child(inner)
+        visual.modulate = Color(1, 1, 1, 0.55)
 
     # 코스트 구슬 (좌상단 외측, 36×36 원 — HUD 마나 오브와 동일 쉐이더)
     var orb := _make_orb(Vector2(36, 36))
     orb.position = Vector2(-10, -10)
-    inner.add_child(orb)
+    visual.add_child(orb)
 
     var cost_lbl := _make_label("%d" % card_def.cost, 16, Color.WHITE)
     cost_lbl.position = Vector2(0, 0)
@@ -838,7 +844,7 @@ func _make_card_view(idx: int, card_inst: Dictionary, energy: int) -> Button:
     slot_lbl.size = Vector2(18, 20)
     slot_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     slot_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    inner.add_child(slot_lbl)
+    visual.add_child(slot_lbl)
 
     # 이름
     var name_lbl := _make_label(card_def.name, 15, Color.WHITE)
@@ -846,7 +852,7 @@ func _make_card_view(idx: int, card_inst: Dictionary, energy: int) -> Button:
     name_lbl.size = Vector2(CARD_W - 20, 22)
     name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    inner.add_child(name_lbl)
+    visual.add_child(name_lbl)
 
     # 아트 플레이스홀더
     var art := Panel.new()
@@ -855,7 +861,7 @@ func _make_card_view(idx: int, card_inst: Dictionary, energy: int) -> Button:
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     art.add_theme_stylebox_override(
         "panel", _make_panel_style(COL_CARD_ART_BG, Color.TRANSPARENT, 4))
-    inner.add_child(art)
+    visual.add_child(art)
 
     var art_lbl := _make_label("art", 11, Color(1, 1, 1, 0.28))
     art_lbl.position = Vector2(0, 0)
@@ -871,7 +877,7 @@ func _make_card_view(idx: int, card_inst: Dictionary, energy: int) -> Button:
     eff_box.size = Vector2(CARD_W - 20, 38)
     eff_box.add_theme_constant_override("separation", 1)
     eff_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    inner.add_child(eff_box)
+    visual.add_child(eff_box)
 
     var p_effects: Array = preview.get("effects", [])
     for eff in p_effects:
@@ -898,7 +904,7 @@ func _make_card_view(idx: int, card_inst: Dictionary, energy: int) -> Button:
         lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
         eff_box.add_child(lbl)
 
-    return root
+    return visual
 
 
 # ============================================================
