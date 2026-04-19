@@ -30,7 +30,6 @@ const CARD_GAP: int = 12
 const BG_TEX_PATH := "res://에셋/배틀 리소스/배경/배경1.png"
 const ENEMY_TEX_PATH := "res://에셋/배틀 리소스/예시 적/몬스터 예시.png"
 const ATTACK_ICON_RED_PATH := "res://에셋/배틀 리소스/아이콘/적_공격_아이콘_레드.png"
-const SHIELD_ICON_BLUE_PATH := "res://에셋/배틀 리소스/아이콘/방어 아이콘.png"
 const HEROINE_IDLE_DIR := "res://에셋/배틀 리소스/주인공/idle/"
 const HEROINE_ATTACK_DIR := "res://에셋/배틀 리소스/주인공/공격모션/"
 
@@ -96,13 +95,11 @@ var _body_hp_bar: ProgressBar
 var _body_hp_num: Label
 
 var _arm_l_bar: ProgressBar
+var _arm_l_block_bar: ProgressBar
 var _arm_l_hp_num: Label
-var _arm_l_block_box: HBoxContainer
-var _arm_l_block_label: Label
 var _arm_r_bar: ProgressBar
+var _arm_r_block_bar: ProgressBar
 var _arm_r_hp_num: Label
-var _arm_r_block_box: HBoxContainer
-var _arm_r_block_label: Label
 
 var _energy_label: Label
 var _energy_max_label: Label
@@ -112,8 +109,10 @@ var _enemy_name_label: Label
 var _enemy_level_label: Label
 var _enemy_hp_bar: ProgressBar
 var _enemy_hp_num: Label
-var _enemy_intent_icon: TextureRect
-var _enemy_intent_label: Label
+
+# 적 의도 — 몬스터 상단에 떠있는 아이콘 + 숫자 (검은 외곽선)
+var _intent_root: Control
+var _intent_value_label: Label
 
 var _deck_count_num: Label
 var _discard_count_num: Label
@@ -150,6 +149,7 @@ func _ready() -> void:
     _build_hud()
     _build_heroine()
     _build_enemy()
+    _build_intent()
     _build_hand_area()
     _build_end_turn()
     _build_log()
@@ -231,7 +231,7 @@ func _build_hp_panel_hero() -> void:
     # 팔 줄
     var arm_row := HBoxContainer.new()
     arm_row.add_theme_constant_override("separation", 10)
-    arm_row.custom_minimum_size = Vector2(540, 32)
+    arm_row.custom_minimum_size = Vector2(540, 40)
     root.add_child(arm_row)
 
     arm_row.add_child(_build_arm_chip("L"))
@@ -240,35 +240,46 @@ func _build_hp_panel_hero() -> void:
 
 func _build_arm_chip(side: String) -> Panel:
     var chip := Panel.new()
-    chip.custom_minimum_size = Vector2(265, 30)
+    chip.custom_minimum_size = Vector2(265, 38)
     chip.add_theme_stylebox_override(
         "panel", _make_panel_style(COL_CHIP_BG, COL_CHIP_BORDER, 2))
 
     var row := HBoxContainer.new()
-    row.position = Vector2(8, 5)
-    row.custom_minimum_size = Vector2(249, 20)
+    row.position = Vector2(8, 4)
+    row.custom_minimum_size = Vector2(249, 30)
     row.add_theme_constant_override("separation", 6)
     chip.add_child(row)
 
-    var accent := COL_L_ACCENT if side == "L" else COL_R_ACCENT
-    var fill := COL_L_FILL if side == "L" else COL_R_FILL
-    var border := COL_L_BORDER if side == "L" else COL_R_BORDER
-    var blk_col := COL_L_BLOCK_TXT if side == "L" else COL_R_BLOCK_TXT
-
-    var side_lbl := _make_label(side, 11, accent)
-    side_lbl.custom_minimum_size = Vector2(14, 20)
+    # L/R 라벨 (양팔 동일 주황 계열)
+    var side_lbl := _make_label(side, 11, COL_R_ACCENT)
+    side_lbl.custom_minimum_size = Vector2(14, 30)
     side_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     row.add_child(side_lbl)
 
-    var bar := _make_hp_bar(fill, border, Vector2(110, 8))
-    if side == "L":
-        _arm_l_bar = bar
-    else:
-        _arm_r_bar = bar
-    row.add_child(bar)
+    # 바 VBox: 주황 HP + (선택) 파란 블록
+    var bar_box := VBoxContainer.new()
+    bar_box.add_theme_constant_override("separation", 2)
+    bar_box.custom_minimum_size = Vector2(155, 28)
+    row.add_child(bar_box)
 
+    var hp_bar := _make_hp_bar(COL_R_FILL, COL_R_BORDER, Vector2(155, 10))
+    if side == "L":
+        _arm_l_bar = hp_bar
+    else:
+        _arm_r_bar = hp_bar
+    bar_box.add_child(hp_bar)
+
+    var block_bar := _make_hp_bar(COL_L_FILL, COL_L_BORDER, Vector2(155, 5))
+    block_bar.visible = false
+    if side == "L":
+        _arm_l_block_bar = block_bar
+    else:
+        _arm_r_block_bar = block_bar
+    bar_box.add_child(block_bar)
+
+    # HP 숫자
     var hp_num := _make_label("0 / 0", 11, Color.WHITE)
-    hp_num.custom_minimum_size = Vector2(66, 20)
+    hp_num.custom_minimum_size = Vector2(70, 30)
     hp_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     hp_num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     if side == "L":
@@ -276,33 +287,6 @@ func _build_arm_chip(side: String) -> Panel:
     else:
         _arm_r_hp_num = hp_num
     row.add_child(hp_num)
-
-    # 블록 박스 (아이콘 + 숫자)
-    var blk_box := HBoxContainer.new()
-    blk_box.add_theme_constant_override("separation", 3)
-    blk_box.visible = false
-    row.add_child(blk_box)
-
-    var blk_icon := TextureRect.new()
-    var shield_tex: Texture2D = load(SHIELD_ICON_BLUE_PATH)
-    if shield_tex != null:
-        blk_icon.texture = shield_tex
-    blk_icon.custom_minimum_size = Vector2(14, 14)
-    blk_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    blk_icon.modulate = blk_col
-    blk_box.add_child(blk_icon)
-
-    var blk_lbl := _make_label("", 10, blk_col)
-    blk_lbl.custom_minimum_size = Vector2(20, 14)
-    blk_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    blk_box.add_child(blk_lbl)
-
-    if side == "L":
-        _arm_l_block_box = blk_box
-        _arm_l_block_label = blk_lbl
-    else:
-        _arm_r_block_box = blk_box
-        _arm_r_block_label = blk_lbl
 
     return chip
 
@@ -323,6 +307,9 @@ func _build_hud_center() -> void:
 
     var orb := Panel.new()
     orb.custom_minimum_size = Vector2(36, 36)
+    # HBox 안에서 세로로 늘어나지 않도록 — 36×36 정방형 유지 → 정원
+    orb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    orb.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     var orb_style := StyleBoxFlat.new()
     orb_style.bg_color = COL_ENERGY
     orb_style.border_width_left = 2
@@ -392,35 +379,10 @@ func _build_hp_enemy() -> void:
     _enemy_hp_bar = _make_hp_bar(COL_ENEMY_FILL, COL_ENEMY_BORDER, Vector2(360, 14))
     root.add_child(_enemy_hp_bar)
 
-    var foot := HBoxContainer.new()
-    foot.add_theme_constant_override("separation", 8)
-    foot.custom_minimum_size = Vector2(360, 22)
-    root.add_child(foot)
-
     _enemy_hp_num = _make_label("HP 0 / 0", 12, Color.WHITE)
-    _enemy_hp_num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    foot.add_child(_enemy_hp_num)
-
-    var spacer := Control.new()
-    spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    foot.add_child(spacer)
-
-    var intent_box := HBoxContainer.new()
-    intent_box.add_theme_constant_override("separation", 6)
-    foot.add_child(intent_box)
-
-    _enemy_intent_icon = TextureRect.new()
-    var atk_tex: Texture2D = load(ATTACK_ICON_RED_PATH)
-    if atk_tex != null:
-        _enemy_intent_icon.texture = atk_tex
-    _enemy_intent_icon.custom_minimum_size = Vector2(22, 22)
-    _enemy_intent_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    intent_box.add_child(_enemy_intent_icon)
-
-    _enemy_intent_label = _make_label("", 12, COL_ENEMY_INTENT_TXT)
-    _enemy_intent_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    _enemy_intent_label.custom_minimum_size = Vector2(0, 22)
-    intent_box.add_child(_enemy_intent_label)
+    _enemy_hp_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    _enemy_hp_num.custom_minimum_size = Vector2(360, 22)
+    root.add_child(_enemy_hp_num)
 
 
 # --- 최우: 덱 카운트 ---
@@ -496,6 +458,44 @@ func _build_enemy() -> void:
         # 목업: right -40, bottom 40 (우측 40px 넘침)
         _enemy_sprite.position = Vector2(STAGE_W - w + 40, STAGE_H - 40 - h)
     add_child(_enemy_sprite)
+
+
+# ------------------------------------------------------------
+# 적 의도 — 슬더스 스타일 (몬스터 상단에 아이콘 + 숫자, 검은 외곽선)
+# ------------------------------------------------------------
+
+const INTENT_ICON_SIZE := Vector2(38, 38)
+const INTENT_OUTLINE := 2
+
+func _build_intent() -> void:
+    var panel_w: int = 96
+    var panel_h: int = 76
+
+    _intent_root = Control.new()
+    _intent_root.size = Vector2(panel_w, panel_h)
+    _intent_root.custom_minimum_size = _intent_root.size
+    _intent_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(_intent_root)
+
+    var atk_tex: Texture2D = load(ATTACK_ICON_RED_PATH)
+    var icon := _make_outlined_icon(atk_tex, INTENT_ICON_SIZE, Color.BLACK, INTENT_OUTLINE)
+    icon.position = Vector2((panel_w - icon.size.x) / 2.0, 0)
+    _intent_root.add_child(icon)
+
+    _intent_value_label = _make_outlined_label("0", 26, Color.WHITE, 2)
+    _intent_value_label.position = Vector2(0, icon.size.y + 2)
+    _intent_value_label.size = Vector2(panel_w, 30)
+    _intent_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _intent_value_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+    _intent_root.add_child(_intent_value_label)
+
+    # 적 스프라이트 중앙 상단(HUD 바 아래 약간)에 위치
+    var enemy_cx: float = float(STAGE_W - 200)
+    var enemy_top: float = float(HUD_H + 10)
+    if _enemy_sprite != null and _enemy_sprite.texture != null:
+        enemy_cx = _enemy_sprite.position.x + _enemy_sprite.size.x / 2.0
+        enemy_top = max(float(HUD_H + 6), _enemy_sprite.position.y + 8.0)
+    _intent_root.position = Vector2(enemy_cx - panel_w / 2.0, enemy_top)
 
 
 # ------------------------------------------------------------
@@ -663,12 +663,13 @@ func _refresh_hud(snap: Dictionary) -> void:
     _enemy_hp_bar.max_value = max(1, snap.enemy_max_hp)
     _enemy_hp_bar.value = snap.enemy_hp
     _enemy_hp_num.text = "HP %d / %d" % [snap.enemy_hp, snap.enemy_max_hp]
+
+    # 적 의도 — 몬스터 상단의 외곽선 아이콘 + 숫자
     if snap.enemy_hp > 0:
-        _enemy_intent_label.text = "다음 공격 %d" % snap.next_intent
-        _enemy_intent_icon.visible = true
+        _intent_root.visible = true
+        _intent_value_label.text = "%d" % snap.next_intent
     else:
-        _enemy_intent_label.text = ""
-        _enemy_intent_icon.visible = false
+        _intent_root.visible = false
 
     _deck_count_num.text = "%d" % snap.deck_size
     _discard_count_num.text = "%d" % snap.discard_size
@@ -678,8 +679,7 @@ func _refresh_hud(snap: Dictionary) -> void:
 func _refresh_arm(side: String, hp: int, max_hp: int, alive: bool, block: int) -> void:
     var bar: ProgressBar = _arm_l_bar if side == "L" else _arm_r_bar
     var num: Label = _arm_l_hp_num if side == "L" else _arm_r_hp_num
-    var blk_box: HBoxContainer = _arm_l_block_box if side == "L" else _arm_r_block_box
-    var blk_lbl: Label = _arm_l_block_label if side == "L" else _arm_r_block_label
+    var blk_bar: ProgressBar = _arm_l_block_bar if side == "L" else _arm_r_block_bar
 
     bar.max_value = max(1, max_hp)
     bar.value = hp
@@ -690,11 +690,13 @@ func _refresh_arm(side: String, hp: int, max_hp: int, alive: bool, block: int) -
     else:
         num.text = "파괴"
 
-    if block > 0:
-        blk_box.visible = true
-        blk_lbl.text = "%d" % block
+    # 블록 보조 바 (파란색) — 팔 max_hp 기준 스케일
+    if block > 0 and max_hp > 0:
+        blk_bar.visible = true
+        blk_bar.max_value = max_hp
+        blk_bar.value = min(block, max_hp)
     else:
-        blk_box.visible = false
+        blk_bar.visible = false
 
 
 func _refresh_hand(snap: Dictionary) -> void:
@@ -854,6 +856,49 @@ func _make_label(text: String, fs: int, col: Color) -> Label:
     l.add_theme_font_size_override("font_size", fs)
     l.add_theme_color_override("font_color", col)
     return l
+
+
+func _make_outlined_label(text: String, fs: int, col: Color, outline: int = 2) -> Label:
+    var l := _make_label(text, fs, col)
+    l.add_theme_color_override("font_outline_color", Color.BLACK)
+    l.add_theme_constant_override("outline_size", outline)
+    return l
+
+
+# 8방향 오프셋 복제 + 본체 레이어링으로 외곽선 효과 (쉐이더 없이)
+func _make_outlined_icon(tex: Texture2D, icon_size: Vector2, outline_color: Color, outline_w: int = 2) -> Control:
+    var total := icon_size + Vector2(outline_w * 2, outline_w * 2)
+    var root := Control.new()
+    root.custom_minimum_size = total
+    root.size = total
+    root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    if tex == null:
+        return root
+
+    var offsets := [
+        Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1),
+        Vector2(-1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1),
+    ]
+    for o in offsets:
+        var sh := TextureRect.new()
+        sh.texture = tex
+        sh.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        sh.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        sh.size = icon_size
+        sh.position = Vector2(outline_w, outline_w) + o * outline_w
+        sh.modulate = outline_color
+        sh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        root.add_child(sh)
+
+    var real := TextureRect.new()
+    real.texture = tex
+    real.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    real.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    real.size = icon_size
+    real.position = Vector2(outline_w, outline_w)
+    real.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    root.add_child(real)
+    return root
 
 
 func _make_hp_bar(fg: Color, border: Color, bar_size: Vector2) -> ProgressBar:
