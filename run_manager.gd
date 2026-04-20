@@ -1,40 +1,29 @@
 extends Node2D
 
 signal state_changed
+signal internal_run_ended(result: String)
+signal internal_run_started
 
+# 큰 런 마스터 데이터. 세이브/로드 대상. run_data 와 동일 스키마.
+var big_run_data: Dictionary = {}
+# 현재 내부 런 작업 사본. big_run_data.duplicate(true) 로 생성.
 var run_data: Dictionary = {}
 
 func _ready() -> void:
-    # 런은 GameManager.start_run() 이 호출하는 init_run() 으로 개시된다.
-    # 맵 시스템은 레거시 제거됨 — 노드 그래프 기반 재구현 대기 중.
     BattleManager.battle_ended.connect(_on_battle_ended)
-
-
-# ============================================================
-# ArmInstance 스키마 — GameData.ARM_MODULES 템플릿의 복제본 + 런타임 상태.
-# 각 팔은 장비 아이템 인스턴스로 취급되며 고유 instance_id 로 식별.
-#
-# {
-#     "instance_id": int,          # 순차 증가 고유 ID (UI 노출 안 됨)
-#     "template_id": String,       # GameData.ARM_MODULES 의 키 (유래 추적용)
-#     "name": String,              # 템플릿에서 복제
-#     "slot_type": String,         # "left_arm" | "right_arm" | "any"
-#     "max_hp": int,               # 템플릿에서 복제
-#     "hp": int,                   # 런타임 상태. 초기값 = max_hp
-#     "card_ids": Array,           # 템플릿에서 복제 (개별 수정 가능)
-#     "degradation": Dictionary,   # 템플릿에서 복제
-# }
-#
-# 저장 위치: run_data["arm_instances"][instance_id] = ArmInstance
-# 장비 여부: run_data["equipped_arms"]["L"|"R"] 에 instance_id 가 있으면 장착 중.
-#           null 이면 빈 슬롯.
-# ============================================================
-
+    _register_console_commands()
 
 # GameManager.start_run() 이 호출한다.
 func init_run():
+    _new_big_run()
+    _start_internal_run()
+
+
+# --- 큰 런 초기화 (새 게임·로드 시 1회) -----------------------------------
+
+func _new_big_run() -> void:
     var body_max: int = GameData.INITIAL_BODY.max_hp
-    run_data = {
+    big_run_data = {
         "phase": "map",
 
         # 히로인 상태
@@ -47,12 +36,27 @@ func init_run():
         "next_arm_instance_id": 1,
         "arm_inventory_max": 6,
 
-        # 맵 그래프 (GameData.TEST_MAP_GRAPH 의 인스턴스 복제 + visited 상태)
+        # 맵 그래프. big 쪽 맵은 _start_internal_run 에서 어차피 덮어씌워지지만
+        # 스키마 일관성을 위해 여기서도 초기화해둔다.
         "map": _build_initial_map(),
-        "current_node_id": 1,   # 시작 노드
+        "current_node_id": 1,
+
+        # 큰 런 메타. 회귀 횟수 등 내부 런 경계를 넘어 지속되는 상태.
+        "meta": {
+            "big_run_count": 0,
+        },
     }
-    _setup_initial_arms()
-    # 시작 노드 방문 처리
+    _setup_initial_arms_in(big_run_data)
+
+
+# --- 내부 런 시작 (큰 런 진입 직후·매 내부 런 종료 후) ----------------------
+
+func _start_internal_run() -> void:
+    run_data = big_run_data.duplicate(true)
+    # 맵·현재 노드는 내부 런 고유. 복제 후 덮어쓴다.
+    run_data["map"] = _build_initial_map()
+    run_data["current_node_id"] = 1
+    run_data["phase"] = "map"
     if run_data["map"].has(run_data["current_node_id"]):
         run_data["map"][run_data["current_node_id"]]["visited"] = true
     state_changed.emit()
@@ -60,27 +64,28 @@ func init_run():
 
 # GameManager.return_to_title() 이 호출한다.
 func reset() -> void:
+    big_run_data = {}
     run_data = {}
     state_changed.emit()
 
 
 # --- 초기 팔 구성 ---------------------------------------------------------
 
-func _setup_initial_arms() -> void:
-    var l_id: int = _create_arm_instance("left_arm_module")
-    var r_id: int = _create_arm_instance("right_arm_module")
-    _equip_arm("L", l_id)
-    _equip_arm("R", r_id)
-    _create_arm_instance("degraded_arm_module")  # 스페어
+func _setup_initial_arms_in(target: Dictionary) -> void:
+    var l_id: int = _create_arm_instance_in(target, "left_arm_module")
+    var r_id: int = _create_arm_instance_in(target, "right_arm_module")
+    _equip_arm_in(target, "L", l_id)
+    _equip_arm_in(target, "R", r_id)
+    _create_arm_instance_in(target, "degraded_arm_module")  # 스페어
 
 
 # --- 팔 인스턴스 생성자 ----------------------------------------------------
 
-func _create_arm_instance(template_id: String) -> int:
+func _create_arm_instance_in(target: Dictionary, template_id: String) -> int:
     var template: Dictionary = GameData.ARM_MODULES[template_id]
-    var id: int = run_data["next_arm_instance_id"]
-    run_data["next_arm_instance_id"] = id + 1
-    run_data["arm_instances"][id] = {
+    var id: int = target["next_arm_instance_id"]
+    target["next_arm_instance_id"] = id + 1
+    target["arm_instances"][id] = {
         "instance_id": id,
         "template_id": template_id,
         "name": template.name,
@@ -96,8 +101,8 @@ func _create_arm_instance(template_id: String) -> int:
 # --- 장비 슬롯 ------------------------------------------------------------
 
 # 내부용 (init 중 state_changed 따로 안 발신).
-func _equip_arm(side: String, instance_id: int) -> void:
-    run_data["equipped_arms"][side] = instance_id
+func _equip_arm_in(target: Dictionary, side: String, instance_id: int) -> void:
+    target["equipped_arms"][side] = instance_id
 
 
 # 공용 장착 함수. slot_type 호환 검사 포함.
@@ -151,9 +156,35 @@ func get_equipped_arm(side: String) -> Dictionary:
 
 
 # --- 전투 결과 수신 ---------------------------------------------------------
-# BattleManager 가 body_hp / arm.hp 동기화는 이미 완료.
-# 승리 시 현재 노드의 enemy_id 를 null 로 — 몬스터 제거. 해당 자리는 이후 빈 노드.
 
+# BattleManager 가 전투 종료 시 호출. run_data 의 body_hp·팔 인스턴스 갱신은
+# 오직 이 진입점을 통해서만. result 스키마:
+#   { "body_hp": int,
+#     "arm_l": {"instance_id": int, "hp": int} | null,
+#     "arm_r": {"instance_id": int, "hp": int} | null }
+func apply_battle_result(result: Dictionary) -> void:
+    run_data["body_hp"] = result.get("body_hp", run_data.get("body_hp", 0))
+    _apply_arm_result("L", result.get("arm_l"))
+    _apply_arm_result("R", result.get("arm_r"))
+    state_changed.emit()
+
+
+func _apply_arm_result(side: String, arm_result) -> void:
+    if arm_result == null:
+        return
+    var id: int = arm_result["instance_id"]
+    var hp: int = arm_result["hp"]
+    var instances: Dictionary = run_data["arm_instances"]
+    var equipped: Dictionary = run_data["equipped_arms"]
+    # HP 0 → 인스턴스 삭제 + 슬롯 해제. 살아있으면 hp 갱신만.
+    if hp <= 0:
+        instances.erase(id)
+        equipped[side] = null
+    elif instances.has(id):
+        instances[id]["hp"] = hp
+
+
+# 승리 시 현재 노드의 enemy_id 를 null 로 — 몬스터 제거. 해당 자리는 이후 빈 노드.
 func _on_battle_ended(result: String) -> void:
     if result == "defeat":
         run_data["phase"] = "lose"
@@ -219,6 +250,12 @@ func move_to_node(target_id: int) -> bool:
     if not target.is_empty():
         target["visited"] = true
 
+    # 보스 노드 진입 — 내부 런 완주로 간주. 즉시 회귀.
+    # (실제 보스 전투는 미구현. 지금은 회귀 트리거 역할만.)
+    if target.get("type") == "boss":
+        end_internal_run("cleared")
+        return true
+
     # 적이 점거한 노드면 전투 프리뷰로 전환
     if target.get("enemy_id") != null:
         run_data["phase"] = "battle_preview"
@@ -245,3 +282,85 @@ func start_combat() -> void:
 func return_to_map() -> void:
     run_data["phase"] = "map"
     state_changed.emit()
+
+
+# ============================================================
+# 내부 런 종료 · 역류
+# ============================================================
+
+# 내부 런 종료. 덱·장착 상태를 big_run_data 로 역류시킨 뒤 새 내부 런 시작.
+# 전투 중 호출 금지 — battle_manager 가 battle_state 참조 상태이므로 먼저 종료 필요.
+func end_internal_run(result: String) -> void:
+    if run_data.get("phase") == "combat":
+        push_warning("end_internal_run: 전투 중 회귀 불가. 먼저 전투를 종료하세요.")
+        return
+    if big_run_data.is_empty():
+        push_warning("end_internal_run: big_run_data 없음 (런이 시작되지 않음)")
+        return
+
+    # 역류: 각 팔 인스턴스의 card_ids (같은 instance_id 기준 매칭)
+    var run_arms: Dictionary = run_data.get("arm_instances", {})
+    var big_arms: Dictionary = big_run_data["arm_instances"]
+    for id in run_arms.keys():
+        if big_arms.has(id):
+            big_arms[id]["card_ids"] = run_arms[id]["card_ids"].duplicate()
+
+    # 역류: 장착 상태
+    big_run_data["equipped_arms"] = run_data.get("equipped_arms", {}).duplicate()
+
+    # 메타 갱신
+    big_run_data["meta"]["big_run_count"] = big_run_data["meta"].get("big_run_count", 0) + 1
+
+    run_data = {}
+    internal_run_ended.emit(result)
+    _start_internal_run()
+    internal_run_started.emit()
+
+
+# --- 변경자 — 덱 조작 (디버그·보상 공용) --------------------------------
+
+func upgrade_card(instance_id: int, index: int, new_card_id: String) -> bool:
+    var instances: Dictionary = run_data.get("arm_instances", {})
+    if not instances.has(instance_id):
+        push_warning("upgrade_card: instance_id %d 없음" % instance_id)
+        return false
+    var cards: Array = instances[instance_id]["card_ids"]
+    if index < 0 or index >= cards.size():
+        push_warning("upgrade_card: index %d 범위 밖 (크기 %d)" % [index, cards.size()])
+        return false
+    cards[index] = new_card_id
+    state_changed.emit()
+    return true
+
+
+# ============================================================
+# LimboConsole 명령
+# ============================================================
+
+func _register_console_commands() -> void:
+    LimboConsole.register_command(_cmd_show_run, "show_run", "현재 내부 런 덤프")
+    LimboConsole.register_command(_cmd_show_big_run, "show_big_run", "큰 런 (big_run_data) 덤프")
+    LimboConsole.register_command(_cmd_end_run, "end_run", "내부 런 강제 종료. 인자: failed|cleared")
+    LimboConsole.register_command(_cmd_upgrade_card, "upgrade_card",
+        "팔 카드 교체. 인자: <instance_id> <index> <card_id>")
+
+
+func _cmd_show_run() -> void:
+    LimboConsole.info(JSON.stringify(run_data, "  "))
+
+
+func _cmd_show_big_run() -> void:
+    LimboConsole.info(JSON.stringify(big_run_data, "  "))
+
+
+func _cmd_end_run(result: String = "failed") -> void:
+    end_internal_run(result)
+    LimboConsole.info("end_internal_run(%s) 완료. big_run_count=%d" % [
+        result, big_run_data["meta"]["big_run_count"]])
+
+
+func _cmd_upgrade_card(instance_id: int, index: int, card_id: String) -> void:
+    if upgrade_card(instance_id, index, card_id):
+        LimboConsole.info("upgrade_card: 성공")
+    else:
+        LimboConsole.error("upgrade_card: 실패 (경고 로그 확인)")

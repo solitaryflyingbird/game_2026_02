@@ -430,32 +430,17 @@ func get_card_preview(hand_idx: int) -> Dictionary:
 # ============================================================
 
 func _finalize_battle() -> void:
-    _sync_back_to_run()
+    RunManager.apply_battle_result({
+        "body_hp": battle_state["body_hp"],
+        "arm_l": _arm_result_snapshot("L"),
+        "arm_r": _arm_result_snapshot("R"),
+    })
     battle_ended.emit(battle_state["result"])
 
 
-func _sync_back_to_run() -> void:
-    var run_data: Dictionary = RunManager.run_data
-    run_data["body_hp"] = battle_state["body_hp"]
-
-    var arm_l = battle_state.get("arm_l")
-    var arm_r = battle_state.get("arm_r")
-    var instances: Dictionary = run_data.get("arm_instances", {})
-    var equipped: Dictionary = run_data.get("equipped_arms", {})
-
-    # HP 가 0 이면 팔이 완전히 파괴된 것 — 인스턴스 삭제 + 슬롯 해제.
-    # 살아있으면 hp 만 갱신.
-    if arm_l != null:
-        var l_id: int = arm_l.instance_id
-        if arm_l.hp <= 0:
-            instances.erase(l_id)
-            equipped["L"] = null
-        elif instances.has(l_id):
-            instances[l_id]["hp"] = arm_l.hp
-    if arm_r != null:
-        var r_id: int = arm_r.instance_id
-        if arm_r.hp <= 0:
-            instances.erase(r_id)
-            equipped["R"] = null
-        elif instances.has(r_id):
-            instances[r_id]["hp"] = arm_r.hp
+func _arm_result_snapshot(side: String):
+    var key: String = ("arm_l" if side == "L" else "arm_r")
+    var arm = battle_state.get(key)
+    if arm == null:
+        return null
+    return {"instance_id": arm.instance_id, "hp": arm.hp}

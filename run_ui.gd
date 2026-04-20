@@ -32,6 +32,9 @@ var _preview_enemy_name_label: Label
 var _preview_enemy_hp_label: Label
 var _preview_intents_label: Label
 
+# --- 회귀 카운트 (맵 화면 우측 상단, 검증용 임시 라벨) ---
+var _recurrence_label: Label
+
 
 func _ready():
     RunManager.state_changed.connect(_on_state_changed)
@@ -44,6 +47,7 @@ func _ready():
     _build_arm_inspector()
     _build_map_display()
     _build_battle_preview()
+    _build_recurrence_label()
 
 
 # --- 화면 전환 ---
@@ -57,6 +61,8 @@ func _on_state_changed():
             _map_root.visible = false
         if _battle_preview_root != null:
             _battle_preview_root.visible = false
+        if _recurrence_label != null:
+            _recurrence_label.visible = false
         return
 
     var phase = RunManager.run_data["phase"]
@@ -73,6 +79,7 @@ func _on_state_changed():
     _refresh_arm_inspector()
     _refresh_map_display()
     _refresh_battle_preview()
+    _refresh_recurrence_label(phase)
 
     if phase == "combat":
         $battle_ui.begin_combat()
@@ -416,3 +423,28 @@ func _refresh_battle_preview():
     for v in intents:
         parts.append(str(v))
     _preview_intents_label.text = "공격 패턴: %s (순환)" % " → ".join(parts)
+
+
+# ============================================================
+# 회귀 카운트 라벨 (임시 검증용. 맵 화면에서만 표시)
+# ============================================================
+
+func _build_recurrence_label() -> void:
+    _recurrence_label = Label.new()
+    _recurrence_label.position = Vector2(1080, 18)
+    _recurrence_label.size = Vector2(180, 28)
+    _recurrence_label.add_theme_font_size_override("font_size", 18)
+    _recurrence_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    _recurrence_label.visible = false
+    add_child(_recurrence_label)
+
+
+func _refresh_recurrence_label(phase: String) -> void:
+    if _recurrence_label == null:
+        return
+    var show: bool = phase == "map"
+    _recurrence_label.visible = show
+    if not show:
+        return
+    var count: int = RunManager.big_run_data.get("meta", {}).get("big_run_count", 0)
+    _recurrence_label.text = "회귀 %d 회" % count

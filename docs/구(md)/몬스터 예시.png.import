@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://t8sncouvms3h"
-path="res://.godot/imported/몬스터 예시.png-ad7aa4e7293887e61e45e7cece3274e8.ctex"
+path="res://.godot/imported/몬스터 예시.png-83643afe8099cc3db016ac557df1ce97.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://docs/몬스터 예시.png"
-dest_files=["res://.godot/imported/몬스터 예시.png-ad7aa4e7293887e61e45e7cece3274e8.ctex"]
+source_file="res://docs/구(md)/몬스터 예시.png"
+dest_files=["res://.godot/imported/몬스터 예시.png-83643afe8099cc3db016ac557df1ce97.ctex"]
 
 [params]
 
