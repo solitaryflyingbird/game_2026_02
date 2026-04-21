@@ -605,11 +605,11 @@ func _on_arm_destroyed(side: String) -> void:
     _append_log("%s 파괴됨" % _side_kor(side))
 
 
-func _on_battle_ended(result: String) -> void:
+func _on_battle_ended(result: Dictionary) -> void:
     _end_turn_button.disabled = true
     for root in _card_roots:
         root.disabled = true
-    _append_log("전투 종료 — %s" % ("승리" if result == "victory" else "패배"))
+    _append_log("전투 종료 — %s" % ("승리" if result.get("result") == "victory" else "패배"))
 
 
 func _on_play_failed(reason: String) -> void:

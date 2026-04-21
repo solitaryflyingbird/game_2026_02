@@ -9,7 +9,7 @@ signal block_absorbed(arm_side: String, amount: int)
 signal body_damaged(amount: int)
 signal arm_self_damaged(arm_side: String, amount: int)
 signal arm_destroyed(arm_side: String)
-signal battle_ended(result: String)                        # "victory" | "defeat"
+signal battle_ended(result: Dictionary)                    # {result, body_hp, arm_l, arm_r}
 signal play_failed(reason: String)                         # "energy_insufficient" 등
 
 
@@ -20,18 +20,19 @@ var battle_state: Dictionary = {}
 # 전투 시작 (명세 §5.1)
 # ============================================================
 
-func begin_battle(enemy_id: String) -> void:
+func begin_battle(input: Dictionary) -> void:
+    var enemy_id: String = input.get("enemy_id", "")
     if not GameData.ENEMIES.has(enemy_id):
         push_warning("begin_battle: 알 수 없는 enemy_id '%s'" % enemy_id)
         return
     var enemy_data: Dictionary = GameData.ENEMIES[enemy_id]
 
-    var arm_l_src: Dictionary = RunManager.get_equipped_arm("L")
-    var arm_r_src: Dictionary = RunManager.get_equipped_arm("R")
+    var arm_l_src: Dictionary = input.get("arm_l", {})
+    var arm_r_src: Dictionary = input.get("arm_r", {})
 
     battle_state = {
-        "body_hp": RunManager.run_data.get("body_hp", 0),
-        "body_max_hp": RunManager.run_data.get("body_max_hp", 0),
+        "body_hp": input.get("body_hp", 0),
+        "body_max_hp": input.get("body_max_hp", 0),
         "arm_l": (arm_l_src.duplicate(true) if not arm_l_src.is_empty() else null),
         "arm_r": (arm_r_src.duplicate(true) if not arm_r_src.is_empty() else null),
 
@@ -426,16 +427,16 @@ func get_card_preview(hand_idx: int) -> Dictionary:
 
 
 # ============================================================
-# 전투 종료 · RunManager 로 HP 동기화
+# 전투 종료 — 결과 딕셔너리 한 번 emit. RunManager 가 수신해 run_data 에 반영.
 # ============================================================
 
 func _finalize_battle() -> void:
-    RunManager.apply_battle_result({
+    battle_ended.emit({
+        "result": battle_state["result"],
         "body_hp": battle_state["body_hp"],
         "arm_l": _arm_result_snapshot("L"),
         "arm_r": _arm_result_snapshot("R"),
     })
-    battle_ended.emit(battle_state["result"])
 
 
 func _arm_result_snapshot(side: String):

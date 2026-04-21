@@ -157,15 +157,26 @@ func get_equipped_arm(side: String) -> Dictionary:
 
 # --- 전투 결과 수신 ---------------------------------------------------------
 
-# BattleManager 가 전투 종료 시 호출. run_data 의 body_hp·팔 인스턴스 갱신은
-# 오직 이 진입점을 통해서만. result 스키마:
-#   { "body_hp": int,
+# BattleManager.battle_ended 시그널의 유일한 수신 진입점. run_data 의
+# body_hp·팔 인스턴스·phase 갱신을 전부 여기서 수행. result 스키마:
+#   { "result": "victory" | "defeat",
+#     "body_hp": int,
 #     "arm_l": {"instance_id": int, "hp": int} | null,
 #     "arm_r": {"instance_id": int, "hp": int} | null }
-func apply_battle_result(result: Dictionary) -> void:
+func _on_battle_ended(result: Dictionary) -> void:
     run_data["body_hp"] = result.get("body_hp", run_data.get("body_hp", 0))
     _apply_arm_result("L", result.get("arm_l"))
     _apply_arm_result("R", result.get("arm_r"))
+
+    if result.get("result") == "defeat":
+        run_data["phase"] = "lose"
+    else:
+        # 승리 — 현재 노드의 적 제거
+        var current_id = run_data.get("current_node_id")
+        if current_id != null and run_data.get("map", {}).has(current_id):
+            run_data["map"][current_id]["enemy_id"] = null
+        run_data["phase"] = "reward"
+
     state_changed.emit()
 
 
@@ -182,22 +193,6 @@ func _apply_arm_result(side: String, arm_result) -> void:
         equipped[side] = null
     elif instances.has(id):
         instances[id]["hp"] = hp
-
-
-# 승리 시 현재 노드의 enemy_id 를 null 로 — 몬스터 제거. 해당 자리는 이후 빈 노드.
-func _on_battle_ended(result: String) -> void:
-    if result == "defeat":
-        run_data["phase"] = "lose"
-        state_changed.emit()
-        return
-
-    # 승리 — 현재 노드의 적 제거
-    var current_id = run_data.get("current_node_id")
-    if current_id != null and run_data.get("map", {}).has(current_id):
-        run_data["map"][current_id]["enemy_id"] = null
-
-    run_data["phase"] = "reward"
-    state_changed.emit()
 
 
 # ============================================================
@@ -272,7 +267,13 @@ func start_combat() -> void:
     if enemy_id == null:
         push_warning("start_combat: 현재 노드에 enemy_id 없음")
         return
-    BattleManager.begin_battle(enemy_id)
+    BattleManager.begin_battle({
+        "enemy_id": enemy_id,
+        "body_hp": run_data["body_hp"],
+        "body_max_hp": run_data["body_max_hp"],
+        "arm_l": get_equipped_arm("L"),
+        "arm_r": get_equipped_arm("R"),
+    })
     run_data["phase"] = "combat"
     state_changed.emit()
 
