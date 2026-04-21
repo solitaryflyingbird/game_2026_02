@@ -2,15 +2,13 @@ extends Node2D
 
 # ============================================================
 # 런 진행 중 UI. RunManager.state_changed 구독 후 화면 갱신.
-# 맵 시스템은 레거시 제거됨 — phase "map" 일 때 플로어 스크린을
-# 임시 전투 진입점으로 재활용 (맵 재구축 후 교체 예정).
+# 맵/조우/회귀 라벨은 프로그래매틱 빌드, 전투·보상·결과는 씬 자식.
 # ============================================================
 
 @onready var screens = {
     "combat":  $battle_ui,
     "reward":  $reward_screen,
     "lose":    $result_screen,
-    "victory": $result_screen,
 }
 
 # --- 팔 인스펙터 (자료구조 확인용 + 장착 조작) ---
@@ -102,8 +100,6 @@ func update_labels():
         return
 
     match d["phase"]:
-        "victory":
-            $result_screen/result_label.text = "임무 완료"
         "lose":
             $result_screen/result_label.text = "기동 정지"
 

@@ -157,11 +157,6 @@ var _log_label: Label
 # ============================================================
 
 func _ready() -> void:
-    # 씬에 남은 레거시 자식 전부 숨김 (예: 사용하지 않는 deck_label)
-    for c in get_children():
-        if c is CanvasItem:
-            c.hide()
-
     # 전체 스테이지 기준 좌표 사용 (anchors_preset=0 유지)
     position = Vector2.ZERO
     size = Vector2(STAGE_W, STAGE_H)

@@ -79,14 +79,6 @@ offset_right = 40.0
 offset_bottom = 40.0
 script = ExtResource("2_0xm2m")
 
-[node name="deck_label" type="Label" parent="run_ui/battle_ui" unique_id=2008776941]
-layout_mode = 0
-offset_left = 80.0
-offset_top = 40.0
-offset_right = 1200.0
-offset_bottom = 680.0
-text = "(전투 진입 시 덱 목록 표시)"
-
 [node name="reward_screen" type="Control" parent="run_ui" unique_id=564545111]
 layout_mode = 3
 anchors_preset = 0
