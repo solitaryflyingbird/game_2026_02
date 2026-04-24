@@ -1,3 +1,7 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# 창작중인 에셋 자료·설계 (AI 의뢰 참고·PSD 작업·에셋 창조 설계안 등)
+/에셋 창조/
+/docs/히로인 전투 에셋 창조안.md
