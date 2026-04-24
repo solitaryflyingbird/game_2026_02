@@ -18,6 +18,10 @@ var _arm_inspector_panel: Panel
 var _arm_inspector_container: VBoxContainer
 var _arm_inspect_mode: String = ""  # "" | "equipped" | "spare"
 
+# --- 히로인 일러스트 (인스펙터 토글 시 좌측 표시) ---
+const HEROINE_FRONT_DIR := "res://에셋/타이틀/"   # battle_ui 와 동일 idle 8프레임
+var _heroine_sprite: AnimatedSprite2D
+
 # --- 맵 디스플레이 ---
 const MAP_ORIGIN: Vector2 = Vector2(180, 90)
 const MAP_SIZE: Vector2 = Vector2(880, 500)
@@ -42,10 +46,11 @@ func _ready():
     # 결과 (승리·패배 공용) — 타이틀로
     $result_screen/title_button.pressed.connect(GameManager.return_to_title)
 
-    _build_arm_inspector()
     _build_map_display()
     _build_battle_preview()
     _build_recurrence_label()
+    _build_arm_inspector()           # 맵 위에 — 노드 버튼이 인스펙터 덮지 않도록
+    _build_heroine_illustration()    # 맨 마지막 — 모든 위에 그려지도록
 
 
 # --- 화면 전환 ---
@@ -55,6 +60,8 @@ func _on_state_changed():
         _arm_inspector_panel.visible = false
         _btn_show_equipped.visible = false
         _btn_show_spare.visible = false
+        if _heroine_sprite != null:
+            _heroine_sprite.visible = false
         if _map_root != null:
             _map_root.visible = false
         if _battle_preview_root != null:
@@ -71,6 +78,7 @@ func _on_state_changed():
     if in_combat:
         _arm_inspector_panel.visible = false
         _arm_inspect_mode = ""
+    _heroine_sprite.visible = _arm_inspector_panel.visible
 
     show_phase(phase)
     update_labels()
@@ -146,6 +154,7 @@ func _on_show_equipped_pressed():
         _arm_inspect_mode = "equipped"
         _arm_inspector_panel.visible = true
         _refresh_arm_inspector()
+    _heroine_sprite.visible = _arm_inspector_panel.visible
 
 
 func _on_show_spare_pressed():
@@ -156,6 +165,7 @@ func _on_show_spare_pressed():
         _arm_inspect_mode = "spare"
         _arm_inspector_panel.visible = true
         _refresh_arm_inspector()
+    _heroine_sprite.visible = _arm_inspector_panel.visible
 
 
 func _refresh_arm_inspector():
@@ -180,6 +190,27 @@ func _refresh_arm_inspector():
 func _clear_inspector_container():
     for child in _arm_inspector_container.get_children():
         child.queue_free()
+
+
+# --- 히로인 일러스트 빌드 (battle_ui 와 동일 idle 8프레임) ---
+
+func _build_heroine_illustration() -> void:
+    _heroine_sprite = AnimatedSprite2D.new()
+    var frames := SpriteFrames.new()
+    frames.add_animation("idle")
+    frames.set_animation_speed("idle", 8)
+    frames.set_animation_loop("idle", true)
+    for i in range(1, 9):
+        var f: Texture2D = load(HEROINE_FRONT_DIR + "%d.png" % i)
+        if f != null:
+            frames.add_frame("idle", f)
+    _heroine_sprite.sprite_frames = frames
+    _heroine_sprite.animation = "idle"
+    _heroine_sprite.autoplay = "idle"
+    _heroine_sprite.scale = Vector2(0.45, 0.45)
+    _heroine_sprite.position = Vector2(240, 441)
+    _heroine_sprite.visible = false
+    add_child(_heroine_sprite)
 
 
 func _build_equipped_view(instances: Dictionary, equipped: Dictionary):
