@@ -56,6 +56,10 @@ func begin_battle(input: Dictionary) -> void:
         "result": "",
 
         "next_card_instance_id": 1,
+
+        # 화폐 — 처치 시점에 GameData.ENEMIES[<eid>].data_drop 만큼 누적.
+        # 다적 도입 시 각 적 사망 분기에서 += 한 줄씩.
+        "drop": 0,
     }
 
     battle_state["deck"] = _build_initial_deck()
@@ -168,6 +172,7 @@ func play_card(hand_idx: int) -> bool:
 
     if battle_state["enemy_hp"] <= 0:
         battle_state["enemy_hp"] = 0
+        battle_state["drop"] += GameData.ENEMIES[battle_state["enemy_id"]].get("data_drop", 0)
         battle_state["result"] = "victory"
         _finalize_battle()
 
@@ -436,6 +441,7 @@ func _finalize_battle() -> void:
         "body_hp": battle_state["body_hp"],
         "arm_l": _arm_result_snapshot("L"),
         "arm_r": _arm_result_snapshot("R"),
+        "drop": battle_state["drop"],
     })
 
 

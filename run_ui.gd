@@ -37,6 +37,9 @@ var _preview_intents_label: Label
 # --- 회귀 카운트 (맵 화면 우측 상단, 검증용 임시 라벨) ---
 var _recurrence_label: Label
 
+# --- 연구 데이터 잔액 (맵 화면 우측 상단, 회귀 카운트 아래) ---
+var _balance_label: Label
+
 
 func _ready():
     RunManager.state_changed.connect(_on_state_changed)
@@ -49,6 +52,7 @@ func _ready():
     _build_map_display()
     _build_battle_preview()
     _build_recurrence_label()
+    _build_balance_label()
     _build_arm_inspector()           # 맵 위에 — 노드 버튼이 인스펙터 덮지 않도록
     _build_heroine_illustration()    # 맨 마지막 — 모든 위에 그려지도록
 
@@ -68,6 +72,8 @@ func _on_state_changed():
             _battle_preview_root.visible = false
         if _recurrence_label != null:
             _recurrence_label.visible = false
+        if _balance_label != null:
+            _balance_label.visible = false
         return
 
     var phase = RunManager.run_data["phase"]
@@ -86,6 +92,7 @@ func _on_state_changed():
     _refresh_map_display()
     _refresh_battle_preview()
     _refresh_recurrence_label(phase)
+    _refresh_balance_label(phase)
 
     if phase == "combat":
         $battle_ui.begin_combat()
@@ -475,3 +482,28 @@ func _refresh_recurrence_label(phase: String) -> void:
         return
     var count: int = RunManager.big_run_data.get("meta", {}).get("big_run_count", 0)
     _recurrence_label.text = "회귀 %d 회" % count
+
+
+# ============================================================
+# 연구 데이터 잔액 라벨 (맵 화면 우측 상단, 회귀 카운트 아래)
+# ============================================================
+
+func _build_balance_label() -> void:
+    _balance_label = Label.new()
+    _balance_label.position = Vector2(1080, 46)  # 회귀 라벨 바로 아래
+    _balance_label.size = Vector2(180, 28)
+    _balance_label.add_theme_font_size_override("font_size", 16)
+    _balance_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    _balance_label.visible = false
+    add_child(_balance_label)
+
+
+func _refresh_balance_label(phase: String) -> void:
+    if _balance_label == null:
+        return
+    var show: bool = phase == "map"
+    _balance_label.visible = show
+    if not show:
+        return
+    var data: int = RunManager.big_run_data.get("research_data", 0)
+    _balance_label.text = "연구 데이터 %d" % data

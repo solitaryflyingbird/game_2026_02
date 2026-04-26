@@ -227,11 +227,16 @@ const ARM_MODULES = {
 # enemy_id 로 조회. 노드에 enemy_id 를 두고 조우 시 여기를 참조.
 
 const ENEMIES = {
-    "larva":            { "name": "에벌레",   "max_hp": 50,  "intents": [10, 20, 10, 20] },
-    "big_worm":         { "name": "큰벌레",   "max_hp": 80,  "intents": [20, 20, 10, 30] },
-    "soldier":          { "name": "병사",     "max_hp": 120, "intents": [20, 30, 20, 30] },
-    "assault_trooper":  { "name": "돌격병",   "max_hp": 160, "intents": [30, 30, 20, 40] },
-    "guardian":         { "name": "수호자",   "max_hp": 220, "intents": [30, 40, 20, 50, 30] },
+    "larva":            { "name": "에벌레",   "max_hp": 50,  "intents": [10, 20, 10, 20],
+                          "data_drop": 10 },
+    "big_worm":         { "name": "큰벌레",   "max_hp": 80,  "intents": [20, 20, 10, 30],
+                          "data_drop": 15 },
+    "soldier":          { "name": "병사",     "max_hp": 120, "intents": [20, 30, 20, 30],
+                          "data_drop": 25 },
+    "assault_trooper":  { "name": "돌격병",   "max_hp": 160, "intents": [30, 30, 20, 40],
+                          "data_drop": 40 },
+    "guardian":         { "name": "수호자",   "max_hp": 220, "intents": [30, 40, 20, 50, 30],
+                          "data_drop": 100 },
 }
 
 

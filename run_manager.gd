@@ -45,6 +45,9 @@ func _new_big_run() -> void:
         "meta": {
             "big_run_count": 0,
         },
+
+        # 화폐 — 적 처치 드롭 누적. 회귀 시 유지, reset() 시 소멸.
+        "research_data": 0,
     }
     _setup_initial_arms_in(big_run_data)
 
@@ -171,7 +174,9 @@ func _on_battle_ended(result: Dictionary) -> void:
     if result.get("result") == "defeat":
         run_data["phase"] = "lose"
     else:
-        # 승리 — 현재 노드의 적 제거
+        # 승리 — 드롭 가산
+        big_run_data["research_data"] += result.get("drop", 0)
+        # 현재 노드의 적 제거
         var current_id = run_data.get("current_node_id")
         if current_id != null and run_data.get("map", {}).has(current_id):
             run_data["map"][current_id]["enemy_id"] = null
