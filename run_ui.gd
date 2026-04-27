@@ -6,9 +6,10 @@ extends Node2D
 # ============================================================
 
 @onready var screens = {
-    "combat":  $battle_ui,
-    "reward":  $reward_screen,
-    "lose":    $result_screen,
+    "combat":   $battle_ui,
+    "reward":   $reward_screen,
+    "lose":     $result_screen,
+    "research": $research_screen,
 }
 
 # --- 팔 인스펙터 (자료구조 확인용 + 장착 조작) ---
