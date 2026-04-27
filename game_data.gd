@@ -223,6 +223,39 @@ const ARM_MODULES = {
 }
 
 
+# --- 주인공의 연구 — 회귀 직전 강화 옵션 풀 ---------------------------------
+# `_generate_research_offers` 가 이 풀을 셔플해 무작위 2개를 골라 제시.
+# 효과 적용은 RunManager._apply_research_effect → _apply_<type> 분기.
+# type 에 따른 params 스키마:
+#   body_boost          { amount: int }  — body_max_hp / body_hp 둘 다 += amount
+#   arm_attack_boost    { amount: int }  — 보유 모든 팔 인스턴스 attack_bonus += amount
+#   arm_durability_boost{ amount: int }  — 보유 모든 팔 인스턴스 max_hp / hp 둘 다 += amount
+
+const RESEARCH_OPTIONS = {
+    "body_boost_basic": {
+        "type": "body_boost",
+        "name": "신체 강화 연구",
+        "description": "몸 최대 HP +20",
+        "base_price": 15,
+        "params": { "amount": 20 },
+    },
+    "arm_attack_basic": {
+        "type": "arm_attack_boost",
+        "name": "공격 출력 해석",
+        "description": "양팔 공격력 +1 (좌·우 모두)",
+        "base_price": 15,
+        "params": { "amount": 1 },
+    },
+    "arm_durability_basic": {
+        "type": "arm_durability_boost",
+        "name": "내구 구조 해석",
+        "description": "양팔 내구도 +20 (좌·우 모두)",
+        "base_price": 15,
+        "params": { "amount": 20 },
+    },
+}
+
+
 # --- 몬스터 데이터 -----------------------------------------------------------
 # enemy_id 로 조회. 노드에 enemy_id 를 두고 조우 시 여기를 참조.
 
@@ -254,12 +287,14 @@ const ENEMIES = {
 
 # position 은 0.0~1.0 정규화 좌표 [x, y]. UI 가 맵 영역 크기에 맞춰 투영.
 # enemy_id 가 있는 노드는 조우 시 해당 몬스터와 전투. 없으면 빈 노드 (시작점 등).
-# type == "boss" 노드는 진입 즉시 내부 런 완주 (회귀 트리거). 실제 보스 전투는 추후.
+# type == "research" 노드는 진입 시 phase = "research" 로 전환. 회귀 직전
+# 주인공의 연구 페이즈 (RESEARCH_OPTIONS 에서 무작위 2개 제시).
+# 진짜 보스 전투 (type == "boss") 는 진 엔딩 결전 도입 시 부활 — 현재는 휴면.
 const TEST_MAP_GRAPH = {
     1: { "id": 1, "connections": [2, 5], "position": [0.05, 0.5] },
     2: { "id": 2, "connections": [1, 3], "position": [0.3,  0.15], "enemy_id": "larva" },
     3: { "id": 3, "connections": [2, 4], "position": [0.7,  0.15], "enemy_id": "big_worm" },
-    4: { "id": 4, "connections": [3, 6], "position": [0.95, 0.5],  "type": "boss" },
+    4: { "id": 4, "connections": [3, 6], "position": [0.95, 0.5],  "type": "research" },
     5: { "id": 5, "connections": [1, 6], "position": [0.3,  0.85], "enemy_id": "soldier" },
     6: { "id": 6, "connections": [5, 4], "position": [0.7,  0.85], "enemy_id": "assault_trooper" },
 }
