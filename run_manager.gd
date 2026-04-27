@@ -97,6 +97,9 @@ func _create_arm_instance_in(target: Dictionary, template_id: String) -> int:
         "hp": template.max_hp,
         "card_ids": template.card_ids.duplicate(),
         "degradation": template.degradation.duplicate(true),
+        # 주인공의 연구 (arm_attack_boost) 로 누적되는 항구적 공격력 보너스.
+        # BattleManager 의 deal_damage 계산에 (eff.value + bonus) * mult 형태로 반영.
+        "attack_bonus": 0,
     }
     return id
 
