@@ -253,10 +253,11 @@ func move_to_node(target_id: int) -> bool:
     if not target.is_empty():
         target["visited"] = true
 
-    # 보스 노드 진입 — 내부 런 완주로 간주. 즉시 회귀.
-    # (실제 보스 전투는 미구현. 지금은 회귀 트리거 역할만.)
-    if target.get("type") == "boss":
-        end_internal_run("cleared")
+    # 연구 노드 진입 — 회귀 직전 주인공의 연구 페이즈로 전환.
+    # phase = "research", run_data["research_offers"] 에 무작위 2개 옵션 생성.
+    # (휴면 중인 type "boss" 는 진 엔딩 결전 도입 시 부활 — 별도 분기로 갈 예정.)
+    if target.get("type") == "research":
+        _enter_research()
         return true
 
     # 적이 점거한 노드면 전투 프리뷰로 전환
@@ -291,6 +292,45 @@ func start_combat() -> void:
 func return_to_map() -> void:
     run_data["phase"] = "map"
     state_changed.emit()
+
+
+# ============================================================
+# 주인공의 연구 (회귀 직전 강화 페이즈)
+# ============================================================
+# 풀: GameData.RESEARCH_OPTIONS (3종)
+# 진입: move_to_node 가 type "research" 노드에서 호출
+# 흐름: _enter_research → (UI 가 purchase 호출 0~2회) → leave_research → 회귀
+# 영속 상태 변경 단일 출처는 RunManager. UI 는 명령만 보냄.
+
+func _enter_research() -> void:
+    run_data["research_offers"] = _generate_research_offers()
+    run_data["phase"] = "research"
+    state_changed.emit()
+
+
+# RESEARCH_OPTIONS 키를 셔플해 앞 2개를 ResearchOfferEntry 로 포장.
+# 동일 옵션 중복 없음. 풀 크기가 2 미만이면 가능한 만큼만 반환.
+func _generate_research_offers() -> Array:
+    var ids: Array = GameData.RESEARCH_OPTIONS.keys()
+    ids.shuffle()
+    var picks: Array = ids.slice(0, 2)
+    var result: Array = []
+    for id in picks:
+        var opt: Dictionary = GameData.RESEARCH_OPTIONS[id]
+        result.append({
+            "item_id": id,
+            "price": opt.get("base_price", 0),
+            "applied": false,
+        })
+    return result
+
+
+# 연구 종료 → 회귀. 옵션 적용 여부와 무관하게 호출 가능.
+func leave_research() -> void:
+    if run_data.get("phase") != "research":
+        push_warning("leave_research: phase != 'research' (현재: %s)" % run_data.get("phase"))
+        return
+    end_internal_run("cleared")
 
 
 # ============================================================
@@ -352,6 +392,7 @@ func _register_console_commands() -> void:
     LimboConsole.register_command(_cmd_end_run, "end_run", "내부 런 강제 종료. 인자: failed|cleared")
     LimboConsole.register_command(_cmd_upgrade_card, "upgrade_card",
         "팔 카드 교체. 인자: <instance_id> <index> <card_id>")
+    LimboConsole.register_command(_cmd_leave_research, "leave_research", "연구 페이즈 종료 (회귀)")
 
 
 func _cmd_show_run() -> void:
@@ -373,3 +414,7 @@ func _cmd_upgrade_card(instance_id: int, index: int, card_id: String) -> void:
         LimboConsole.info("upgrade_card: 성공")
     else:
         LimboConsole.error("upgrade_card: 실패 (경고 로그 확인)")
+
+
+func _cmd_leave_research() -> void:
+    leave_research()
