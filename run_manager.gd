@@ -333,6 +333,89 @@ func leave_research() -> void:
     end_internal_run("cleared")
 
 
+# 연구 옵션 적용 시도. 성공 시 효과 적용 + 잔액 차감 + applied = true + emit.
+# 실패 조건: phase 불일치 / idx 범위 밖 / 이미 applied / 잔액 부족 / item_id 미정의 /
+# 효과 적용 실패. 어느 단계든 실패 시 잔액·applied 무변.
+func purchase(offer_idx: int) -> bool:
+    if run_data.get("phase") != "research":
+        push_warning("purchase: phase != 'research' (현재: %s)" % run_data.get("phase"))
+        return false
+    var offers: Array = run_data.get("research_offers", [])
+    if offer_idx < 0 or offer_idx >= offers.size():
+        push_warning("purchase: offer_idx %d 범위 밖 (size %d)" % [offer_idx, offers.size()])
+        return false
+    var entry: Dictionary = offers[offer_idx]
+    if entry.get("applied", false):
+        return false
+    var price: int = entry.get("price", 0)
+    if big_run_data.get("research_data", 0) < price:
+        return false
+    var option: Dictionary = GameData.RESEARCH_OPTIONS.get(entry.get("item_id", ""), {})
+    if option.is_empty():
+        push_warning("purchase: 알 수 없는 item_id '%s'" % entry.get("item_id"))
+        return false
+
+    if not _apply_research_effect(option):
+        return false
+
+    big_run_data["research_data"] -= price
+    entry["applied"] = true
+    state_changed.emit()
+    return true
+
+
+# 효과 타입 디스패처. 새 효과 추가 시 여기에 분기 한 줄 + _apply_<type> 함수 추가.
+func _apply_research_effect(option: Dictionary) -> bool:
+    match option.get("type", ""):
+        "body_boost":
+            return _apply_body_boost(option.get("params", {}))
+        "arm_attack_boost":
+            return _apply_arm_attack_boost(option.get("params", {}))
+        "arm_durability_boost":
+            return _apply_arm_durability_boost(option.get("params", {}))
+        _:
+            push_warning("_apply_research_effect: 알 수 없는 type '%s'" % option.get("type"))
+            return false
+
+
+# 영속 상태 변경 단일 출처. big_run_data 가 회귀를 통과하는 진짜 저장소,
+# run_data 측은 UI 즉시 반영을 위한 동기 사본 (회귀 시 어차피 _start_internal_run 이
+# duplicate(true) 로 다시 빌드).
+
+func _apply_body_boost(params: Dictionary) -> bool:
+    var amount: int = params.get("amount", 0)
+    big_run_data["body_max_hp"] = big_run_data.get("body_max_hp", 0) + amount
+    big_run_data["body_hp"] = big_run_data.get("body_hp", 0) + amount
+    run_data["body_max_hp"] = run_data.get("body_max_hp", 0) + amount
+    run_data["body_hp"] = run_data.get("body_hp", 0) + amount
+    return true
+
+
+# 보유한 모든 팔 인스턴스(L·R 장착 + 스페어) 의 attack_bonus 일괄 += amount.
+# 새로 획득되는 팔은 이 보너스를 받지 않음 (각자 따로 연구 필요).
+func _apply_arm_attack_boost(params: Dictionary) -> bool:
+    var amount: int = params.get("amount", 1)
+    for arm in big_run_data.get("arm_instances", {}).values():
+        arm["attack_bonus"] = arm.get("attack_bonus", 0) + amount
+    for arm in run_data.get("arm_instances", {}).values():
+        arm["attack_bonus"] = arm.get("attack_bonus", 0) + amount
+    return true
+
+
+# 보유한 모든 팔 인스턴스의 max_hp / hp 일괄 += amount. 현재 HP 도 함께 증가
+# (회복 효과 겸함). 회귀 후엔 어차피 max_hp 까지 채워서 시작하므로 hp 증가는
+# 본 페이즈 화면에서의 시각 정합용.
+func _apply_arm_durability_boost(params: Dictionary) -> bool:
+    var amount: int = params.get("amount", 0)
+    for arm in big_run_data.get("arm_instances", {}).values():
+        arm["max_hp"] = arm.get("max_hp", 0) + amount
+        arm["hp"] = arm.get("hp", 0) + amount
+    for arm in run_data.get("arm_instances", {}).values():
+        arm["max_hp"] = arm.get("max_hp", 0) + amount
+        arm["hp"] = arm.get("hp", 0) + amount
+    return true
+
+
 # ============================================================
 # 내부 런 종료 · 역류
 # ============================================================
@@ -393,6 +476,7 @@ func _register_console_commands() -> void:
     LimboConsole.register_command(_cmd_upgrade_card, "upgrade_card",
         "팔 카드 교체. 인자: <instance_id> <index> <card_id>")
     LimboConsole.register_command(_cmd_leave_research, "leave_research", "연구 페이즈 종료 (회귀)")
+    LimboConsole.register_command(_cmd_purchase, "purchase", "연구 옵션 적용. 인자: <offer_idx>")
 
 
 func _cmd_show_run() -> void:
@@ -418,3 +502,10 @@ func _cmd_upgrade_card(instance_id: int, index: int, card_id: String) -> void:
 
 func _cmd_leave_research() -> void:
     leave_research()
+
+
+func _cmd_purchase(idx: int) -> void:
+    if purchase(idx):
+        LimboConsole.info("purchase(%d): 성공" % idx)
+    else:
+        LimboConsole.error("purchase(%d): 실패 (경고 로그 확인)" % idx)
