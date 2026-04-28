@@ -192,11 +192,9 @@ func _execute_card_effects(card_inst: Dictionary, card_def: Dictionary) -> void:
     for eff in card_def.effects:
         match eff.type:
             "deal_damage":
-                # attack_bonus 는 팔 출력의 항구적 강화 → mult(저하) 안쪽에 합산.
-                # 손상된 팔에서는 보너스도 같이 감쇠 (분리 가산 시 다 망가진 팔에서도
-                # +1 풀 효력이 남는 게 부자연스러움).
-                var bonus: int = _arm_attack_bonus(side)
-                var dmg: int = int(round((eff.value + bonus) * mult))
+                # arm_attack_boost 는 카드 자체의 effect.value 를 직접 += 했으므로
+                # 여기서 별도 합산 없음 (카드 모델 일체화 후 환원).
+                var dmg: int = int(round(eff.value * mult))
                 battle_state["enemy_hp"] = max(0, battle_state["enemy_hp"] - dmg)
                 damage_dealt.emit(dmg)
 
@@ -258,16 +256,6 @@ func _arm_drop(side: String) -> float:
     if arm == null:
         return 0.0
     return calc_drop(arm.hp, arm.max_hp, arm.degradation)
-
-
-# 주인공의 연구 (arm_attack_boost) 누적 보너스. 인스턴스 dict 의 attack_bonus 키.
-# 팔 부재(파괴) 시 0. deal_damage 의 (eff.value + bonus) * mult 형태로 사용.
-func _arm_attack_bonus(side: String) -> int:
-    var key: String = ("arm_l" if side == "L" else "arm_r")
-    var arm = battle_state.get(key)
-    if arm == null:
-        return 0
-    return arm.get("attack_bonus", 0)
 
 
 func calc_drop(hp: int, max_hp: int, degradation: Dictionary) -> float:
@@ -430,7 +418,7 @@ func get_card_preview(hand_idx: int) -> Dictionary:
         var fv: int = 0
         match eff.type:
             "deal_damage":
-                fv = int(round((eff.value + _arm_attack_bonus(card_inst.arm_side)) * mult))
+                fv = int(round(eff.value * mult))
             "transfer_block":
                 fv = int(round(eff.value * mult))
             "damage_own_arm":

@@ -108,9 +108,6 @@ func _create_arm_instance_in(target: Dictionary, template_id: String) -> int:
         "hp": template.max_hp,
         "cards": cards,
         "degradation": template.degradation.duplicate(true),
-        # 주인공의 연구 (arm_attack_boost) 로 누적되는 항구적 공격력 보너스.
-        # ※ Step 2 에서 cards[*].effects[*].value 직접 변경으로 환원하면서 제거 예정.
-        "attack_bonus": 0,
     }
     return id
 
@@ -402,15 +399,24 @@ func _apply_body_boost(params: Dictionary) -> bool:
     return true
 
 
-# 보유한 모든 팔 인스턴스(L·R 장착 + 스페어) 의 attack_bonus 일괄 += amount.
-# 새로 획득되는 팔은 이 보너스를 받지 않음 (각자 따로 연구 필요).
+# 보유한 모든 팔 인스턴스(L·R 장착 + 스페어) 의 공격 카드 데미지 일괄 += amount.
+# arm.cards[*].effects[*] 의 deal_damage value 만 직접 변경.
+# 새로 획득되는 팔은 이 강화 미적용 (각자 따로 연구 필요).
 func _apply_arm_attack_boost(params: Dictionary) -> bool:
     var amount: int = params.get("amount", 1)
     for arm in big_run_data.get("arm_instances", {}).values():
-        arm["attack_bonus"] = arm.get("attack_bonus", 0) + amount
+        _bump_attack_cards(arm.get("cards", []), amount)
     for arm in run_data.get("arm_instances", {}).values():
-        arm["attack_bonus"] = arm.get("attack_bonus", 0) + amount
+        _bump_attack_cards(arm.get("cards", []), amount)
     return true
+
+
+# 카드 배열 안의 deal_damage 효과들에 += amount. damage_own_arm 같은 다른 효과는 제외.
+func _bump_attack_cards(cards: Array, amount: int) -> void:
+    for card in cards:
+        for eff in card.get("effects", []):
+            if eff.get("type", "") == "deal_damage":
+                eff["value"] = int(eff.get("value", 0)) + amount
 
 
 # 보유한 모든 팔 인스턴스의 max_hp / hp 일괄 += amount. 현재 HP 도 함께 증가

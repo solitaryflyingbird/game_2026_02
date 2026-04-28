@@ -228,7 +228,8 @@ const ARM_MODULES = {
 # 효과 적용은 RunManager._apply_research_effect → _apply_<type> 분기.
 # type 에 따른 params 스키마:
 #   body_boost          { amount: int }  — body_max_hp / body_hp 둘 다 += amount
-#   arm_attack_boost    { amount: int }  — 보유 모든 팔 인스턴스 attack_bonus += amount
+#   arm_attack_boost    { amount: int }  — 보유 모든 팔 인스턴스의 cards[*].effects[*]
+#                                          중 deal_damage value 에 직접 += amount
 #   arm_durability_boost{ amount: int }  — 보유 모든 팔 인스턴스 max_hp / hp 둘 다 += amount
 
 const RESEARCH_OPTIONS = {
