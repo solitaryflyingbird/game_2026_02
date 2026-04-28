@@ -79,16 +79,18 @@ func _build_initial_deck() -> Array:
         var arm = pair[1]
         if arm == null:
             continue
-        for card_id in arm.card_ids:
-            deck.append(_make_card_instance(card_id, side))
+        for card_def in arm.cards:
+            deck.append(_make_card_instance(card_def, side))
     return deck
 
 
-func _make_card_instance(card_id: String, arm_side: String) -> Dictionary:
+# card_def 는 arm.cards[i] 의 deep-copied 사본 (begin_battle 의 arm_l_src.duplicate(true)
+# 가 이미 한 단계 격리). 따라서 card_inst.def mutate 가 RunManager 의 arm 에 안 새어나감.
+func _make_card_instance(card_def: Dictionary, arm_side: String) -> Dictionary:
     var id: int = battle_state["next_card_instance_id"]
     battle_state["next_card_instance_id"] = id + 1
     return {
-        "card_id": card_id,
+        "def": card_def,
         "arm_side": arm_side,
         "instance_id": id,
     }
@@ -154,10 +156,7 @@ func play_card(hand_idx: int) -> bool:
         return false
 
     var card_inst: Dictionary = battle_state["hand"][hand_idx]
-    if not GameData.CARD_TEMPLATES.has(card_inst.card_id):
-        push_warning("play_card: unknown card_id %s" % card_inst.card_id)
-        return false
-    var card_def: Dictionary = GameData.CARD_TEMPLATES[card_inst.card_id]
+    var card_def: Dictionary = card_inst.def
 
     if battle_state["energy"] < card_def.cost:
         play_failed.emit("energy_insufficient")
@@ -420,9 +419,7 @@ func get_card_preview(hand_idx: int) -> Dictionary:
     if hand_idx < 0 or hand_idx >= battle_state["hand"].size():
         return {}
     var card_inst: Dictionary = battle_state["hand"][hand_idx]
-    if not GameData.CARD_TEMPLATES.has(card_inst.card_id):
-        return {}
-    var card_def: Dictionary = GameData.CARD_TEMPLATES[card_inst.card_id]
+    var card_def: Dictionary = card_inst.def
     var mult: float = calc_effective_multiplier(
         card_def.degradation_resistance,
         body_drop(),

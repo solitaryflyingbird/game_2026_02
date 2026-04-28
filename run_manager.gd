@@ -82,12 +82,23 @@ func _setup_initial_arms_in(target: Dictionary) -> void:
     _create_arm_instance_in(target, "degraded_arm_module")  # 스페어
 
 
-# --- 팔 인스턴스 생성자 ----------------------------------------------------
+# --- 카드 / 팔 인스턴스 생성자 ----------------------------------------------
+
+# 카드 모델의 원자 단위. CARD_TEMPLATES 의 한 항목을 deep copy 하고 id 키를 박아둠.
+# 팔의 카드 배열 외에도 향후 보상·이벤트·인벤토리 등 다른 출처에서도 동일하게 호출.
+func _build_card(card_id: String) -> Dictionary:
+    var def: Dictionary = GameData.CARD_TEMPLATES[card_id].duplicate(true)
+    def["id"] = card_id
+    return def
+
 
 func _create_arm_instance_in(target: Dictionary, template_id: String) -> int:
     var template: Dictionary = GameData.ARM_MODULES[template_id]
     var id: int = target["next_arm_instance_id"]
     target["next_arm_instance_id"] = id + 1
+    var cards: Array = []
+    for cid in template.card_ids:
+        cards.append(_build_card(cid))
     target["arm_instances"][id] = {
         "instance_id": id,
         "template_id": template_id,
@@ -95,10 +106,10 @@ func _create_arm_instance_in(target: Dictionary, template_id: String) -> int:
         "slot_type": template.slot_type,
         "max_hp": template.max_hp,
         "hp": template.max_hp,
-        "card_ids": template.card_ids.duplicate(),
+        "cards": cards,
         "degradation": template.degradation.duplicate(true),
         # 주인공의 연구 (arm_attack_boost) 로 누적되는 항구적 공격력 보너스.
-        # BattleManager 의 deal_damage 계산에 (eff.value + bonus) * mult 형태로 반영.
+        # ※ Step 2 에서 cards[*].effects[*].value 직접 변경으로 환원하면서 제거 예정.
         "attack_bonus": 0,
     }
     return id
@@ -430,12 +441,13 @@ func end_internal_run(result: String) -> void:
         push_warning("end_internal_run: big_run_data 없음 (런이 시작되지 않음)")
         return
 
-    # 역류: 각 팔 인스턴스의 card_ids (같은 instance_id 기준 매칭)
+    # 역류: 각 팔 인스턴스의 cards (같은 instance_id 기준 매칭).
+    # cards 는 dict 배열이므로 deep duplicate.
     var run_arms: Dictionary = run_data.get("arm_instances", {})
     var big_arms: Dictionary = big_run_data["arm_instances"]
     for id in run_arms.keys():
         if big_arms.has(id):
-            big_arms[id]["card_ids"] = run_arms[id]["card_ids"].duplicate()
+            big_arms[id]["cards"] = run_arms[id]["cards"].duplicate(true)
 
     # 역류: 장착 상태
     big_run_data["equipped_arms"] = run_data.get("equipped_arms", {}).duplicate()
@@ -456,11 +468,14 @@ func upgrade_card(instance_id: int, index: int, new_card_id: String) -> bool:
     if not instances.has(instance_id):
         push_warning("upgrade_card: instance_id %d 없음" % instance_id)
         return false
-    var cards: Array = instances[instance_id]["card_ids"]
+    var cards: Array = instances[instance_id]["cards"]
     if index < 0 or index >= cards.size():
         push_warning("upgrade_card: index %d 범위 밖 (크기 %d)" % [index, cards.size()])
         return false
-    cards[index] = new_card_id
+    if not GameData.CARD_TEMPLATES.has(new_card_id):
+        push_warning("upgrade_card: 알 수 없는 card_id '%s'" % new_card_id)
+        return false
+    cards[index] = _build_card(new_card_id)
     state_changed.emit()
     return true
 

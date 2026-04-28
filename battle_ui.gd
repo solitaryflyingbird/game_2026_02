@@ -749,7 +749,7 @@ func _refresh_hand(snap: Dictionary) -> void:
         hit_area.add_child(visual)
 
         # 카드 disabled (에너지 부족) — hit_area 단에서 처리. 비주얼은 modulate 로 표시.
-        var card_def: Dictionary = GameData.CARD_TEMPLATES[inst.card_id]
+        var card_def: Dictionary = inst.def
         hit_area.disabled = card_def.cost > snap.energy
 
         # 시그널
@@ -802,7 +802,7 @@ func _kill_card_tween(visual: Control) -> void:
 func _make_card_view(idx: int, card_inst: Dictionary, energy: int) -> Panel:
     # 비주얼 레이어만 만듦 — 클릭/호버는 부모(hit_area Button)가 담당.
     # 이 함수가 반환하는 Panel 은 mouse_filter IGNORE 이며, 호버 시 scale/rotate/translate 된다.
-    var card_def: Dictionary = GameData.CARD_TEMPLATES[card_inst.card_id]
+    var card_def: Dictionary = card_inst.def
     var preview: Dictionary = BattleManager.get_card_preview(idx)
     var category: String = card_def.get("category", "attack")
     var side: String = card_inst.arm_side
