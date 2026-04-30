@@ -296,6 +296,41 @@ const TEST_MAP_GRAPH = {
     2: { "id": 2, "connections": [1, 3], "position": [0.3,  0.15], "enemy_id": "larva" },
     3: { "id": 3, "connections": [2, 4], "position": [0.7,  0.15], "enemy_id": "big_worm" },
     4: { "id": 4, "connections": [3, 6], "position": [0.95, 0.5],  "type": "research" },
-    5: { "id": 5, "connections": [1, 6], "position": [0.3,  0.85], "enemy_id": "soldier" },
+    5: { "id": 5, "connections": [1, 6], "position": [0.3,  0.85], "type": "event" },
     6: { "id": 6, "connections": [5, 4], "position": [0.7,  0.85], "enemy_id": "assault_trooper" },
+}
+
+
+# --- 이벤트 풀 (안 4 — kind 분리 + chain) -----------------------------------
+# 안 4 §3-1. EventManager._resolve_event_for_node 가 트리거 매치 + once_per
+# 필터 + 가중치 추첨으로 선정.
+# 1A 단계: dialogue kind 만 실 구현. 다른 kind 는 다음 차로.
+#   id           — 전역 유일 키 (seen_events 카운트 + chain id)
+#   kind         — "dialogue" (1A) | "effect" | "movie" | "choice" (다음 차로)
+#   trigger      — { type: "node_enter", node_type: <맵노드 type 값> }
+#   once_per     — "big_run" 또는 생략. 회귀 통과해 유지되는 카운트.
+#   weight       — 동일 트리거 충돌 시 가중치.
+#   lines        — dialogue kind 전용. [{speaker, text}].
+
+const EVENTS = {
+    "intro_speech": {
+        "id": "intro_speech",
+        "kind": "dialogue",
+        "trigger": {"type": "run_start"},
+        "once_per": "big_run",
+        "weight": 10,
+        "lines": [
+            {"speaker": "히로인", "text": "시작합니다."},
+        ],
+    },
+    "regression_speech": {
+        "id": "regression_speech",
+        "kind": "dialogue",
+        "trigger": {"type": "node_enter", "node_type": "event"},
+        "once_per": "big_run",
+        "weight": 10,
+        "lines": [
+            {"speaker": "히로인", "text": "회귀합니다."},
+        ],
+    },
 }

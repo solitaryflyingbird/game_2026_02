@@ -16,6 +16,7 @@
 [ext_resource type="Shader" uid="uid://bgpaetre5ndfc" path="res://ui/title_grid.gdshader" id="13_grid"]
 [ext_resource type="Shader" uid="uid://vxoq4uuuojc0" path="res://ui/character_edge.gdshader" id="14_chredge"]
 [ext_resource type="Script" uid="uid://cremdsaq06svu" path="res://research_ui.gd" id="15_research"]
+[ext_resource type="Script" path="res://event_ui.gd" id="16_event"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_grid"]
 shader = ExtResource("13_grid")
@@ -132,6 +133,13 @@ anchors_preset = 0
 offset_right = 1280.0
 offset_bottom = 720.0
 script = ExtResource("15_research")
+
+[node name="event_screen" type="Control" parent="run_ui"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 1280.0
+offset_bottom = 720.0
+script = ExtResource("16_event")
 
 [node name="title_screen" type="Control" parent="." unique_id=1813861609]
 layout_mode = 3

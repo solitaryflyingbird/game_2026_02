@@ -11,6 +11,7 @@ var run_data: Dictionary = {}
 
 func _ready() -> void:
     BattleManager.battle_ended.connect(_on_battle_ended)
+    EventManager.event_resolved.connect(_on_event_resolved)
     _register_console_commands()
 
 # GameManager.start_run() 이 호출한다.
@@ -48,6 +49,10 @@ func _new_big_run() -> void:
 
         # 화폐 — 적 처치 드롭 누적. 회귀 시 유지, reset() 시 소멸.
         "research_data": 0,
+
+        # 이벤트 발생 이력. 키 = event_id (또는 chain_root_id), 값 = 발생 횟수.
+        # once_per "big_run" 필터의 단일 출처. 회귀 통과해 유지, reset() 시 소멸.
+        "seen_events": {},
     }
     _setup_initial_arms_in(big_run_data)
 
@@ -62,6 +67,18 @@ func _start_internal_run() -> void:
     run_data["phase"] = "map"
     if run_data["map"].has(run_data["current_node_id"]):
         run_data["map"][run_data["current_node_id"]]["visited"] = true
+    state_changed.emit()
+    # run_start 트리거 평가 — 매치 시 phase = "event" 전이.
+    var run_start_event_id: String = EventManager.resolve_event("run_start", {})
+    if run_start_event_id != "":
+        _begin_event_phase(run_start_event_id)
+
+
+# 이벤트 진입 — phase 전이 + EventManager 위임 + state_changed.
+# move_to_node 의 type "event" 분기와 _start_internal_run 의 run_start 트리거가 공용.
+func _begin_event_phase(event_id: String) -> void:
+    run_data["phase"] = "event"
+    EventManager.begin_event(event_id, {})
     state_changed.emit()
 
 
@@ -196,6 +213,23 @@ func _on_battle_ended(result: Dictionary) -> void:
     state_changed.emit()
 
 
+# --- 이벤트 결과 수신 -------------------------------------------------------
+
+# EventManager.event_resolved 시그널의 유일한 수신 진입점.
+# seen_events 카운트 갱신 + phase = "map" 복귀.
+# result 스키마: { "event_id": String }  — chain_root_id 가 박혀있음 (안 4 §3-3).
+func _on_event_resolved(result: Dictionary) -> void:
+    var event_id: String = result.get("event_id", "")
+    if event_id == "":
+        push_warning("_on_event_resolved: 빈 event_id")
+        return
+    var seen: Dictionary = big_run_data.get("seen_events", {})
+    seen[event_id] = seen.get(event_id, 0) + 1
+    big_run_data["seen_events"] = seen
+    run_data["phase"] = "map"
+    state_changed.emit()
+
+
 func _apply_arm_result(side: String, arm_result) -> void:
     if arm_result == null:
         return
@@ -245,6 +279,11 @@ func get_node_by_id(id: int) -> Dictionary:
 # 이동 후 대상 노드에 enemy_id 가 있으면 phase 를 "battle_preview" 로 전환.
 # 반환: 이동 성공 여부.
 func move_to_node(target_id: int) -> bool:
+    # 이벤트 활성 중 외부 이동 거부 (안 4 §0-H, on/off 배타 게이팅).
+    if run_data.get("phase") == "event":
+        push_warning("move_to_node: 이벤트 중 이동 불가 (phase = 'event')")
+        return false
+
     var current: Dictionary = get_current_node()
     if current.is_empty():
         push_warning("move_to_node: 현재 노드 없음")
@@ -267,6 +306,14 @@ func move_to_node(target_id: int) -> bool:
     if target.get("type") == "research":
         _enter_research()
         return true
+
+    # 이벤트 노드 진입 — EventManager 위임. 트리거 매치 시 phase = "event" 전이.
+    # 매치 없으면 (예: once_per 필터 통과 못한 경우) 평범한 노드처럼 통과.
+    if target.get("type") == "event":
+        var event_id: String = EventManager._resolve_event_for_node(target)
+        if event_id != "":
+            _begin_event_phase(event_id)
+            return true
 
     # 적이 점거한 노드면 전투 프리뷰로 전환
     if target.get("enemy_id") != null:

@@ -21,6 +21,7 @@ GameData="*uid://c52s14g1q8ryq"
 GameManager="*res://game_manager.gd"
 RunManager="*uid://6tcuo47kk56g"
 BattleManager="*uid://bs0o5t0vjyssw"
+EventManager="*res://event_manager.gd"
 
 [display]
 

@@ -10,6 +10,7 @@ extends Node2D
     "reward":   $reward_screen,
     "lose":     $result_screen,
     "research": $research_screen,
+    "event":    $event_screen,
 }
 
 # --- 팔 인스펙터 (자료구조 확인용 + 장착 조작) ---
@@ -79,10 +80,12 @@ func _on_state_changed():
 
     var phase = RunManager.run_data["phase"]
 
-    var in_combat: bool = phase == "combat"
-    _btn_show_equipped.visible = not in_combat
-    _btn_show_spare.visible = not in_combat
-    if in_combat:
+    # combat·event phase 동안 팔 인스펙터·히로인 일러스트 등 오버레이 UI 숨김.
+    # event phase 는 대사창만 보이는 게 단순.
+    var hide_overlay: bool = phase == "combat" or phase == "event"
+    _btn_show_equipped.visible = not hide_overlay
+    _btn_show_spare.visible = not hide_overlay
+    if hide_overlay:
         _arm_inspector_panel.visible = false
         _arm_inspect_mode = ""
     _heroine_sprite.visible = _arm_inspector_panel.visible
