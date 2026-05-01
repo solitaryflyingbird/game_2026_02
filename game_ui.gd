@@ -31,12 +31,17 @@ func _refresh_visibility() -> void:
     var in_title: bool = GameManager.app_phase == "title"
     _title_screen.visible = in_title
     _run_ui.visible = not in_title
+    if in_title:
+        var load_btn: Button = _title_screen.get_node("load_button")
+        load_btn.disabled = not GameManager.has_save()
 
 
-# --- 스텁 (나중에 설정·불러오기 화면으로 확장) ---
+# --- 타이틀 버튼 핸들러 ---
 
 func _on_load_pressed() -> void:
-    print("[title] 불러오기: 아직 구현되지 않음")
+    if not GameManager.load_save():
+        push_warning("[title] 불러올 세이브 없음 또는 형식 오류")
+
 
 func _on_settings_pressed() -> void:
     print("[title] 설정: 아직 구현되지 않음")

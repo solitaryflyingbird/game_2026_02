@@ -45,6 +45,12 @@ var _balance_label: Label
 # --- 연구 화면 (research_screen 자식 동적 빌드) ---
 var _research_offer_root: HBoxContainer
 
+# --- 저장·타이틀로 버튼 (맵 phase 한정) + 저장 피드백 라벨 ---
+var _save_button: Button
+var _save_feedback_label: Label
+var _save_feedback_timer: Timer
+var _to_title_button: Button
+
 
 func _ready():
     RunManager.state_changed.connect(_on_state_changed)
@@ -59,6 +65,7 @@ func _ready():
     _build_recurrence_label()
     _build_balance_label()
     _build_research_screen()
+    _build_save_ui()
     _build_arm_inspector()           # 맵 위에 — 노드 버튼이 인스펙터 덮지 않도록
     _build_heroine_illustration()    # 맨 마지막 — 모든 위에 그려지도록
 
@@ -80,6 +87,12 @@ func _on_state_changed():
             _recurrence_label.visible = false
         if _balance_label != null:
             _balance_label.visible = false
+        if _save_button != null:
+            _save_button.visible = false
+        if _save_feedback_label != null:
+            _save_feedback_label.visible = false
+        if _to_title_button != null:
+            _to_title_button.visible = false
         return
 
     var phase = RunManager.run_data["phase"]
@@ -102,6 +115,7 @@ func _on_state_changed():
     _refresh_recurrence_label(phase)
     _refresh_balance_label(phase)
     _refresh_research_screen(phase)
+    _refresh_save_button(phase)
 
     if phase == "combat":
         $battle_ui.begin_combat()
@@ -607,3 +621,62 @@ func _make_research_offer_card(idx: int, entry: Dictionary, balance: int) -> Con
 
 func _on_research_apply_pressed(idx: int) -> void:
     RunManager.purchase(idx)
+
+
+# ============================================================
+# 저장 버튼 (맵 phase 한정) + 짧은 피드백
+# ============================================================
+
+func _build_save_ui() -> void:
+    _save_button = Button.new()
+    _save_button.text = "저장"
+    _save_button.position = Vector2(1100, 136)  # 스페어 팔 버튼 (y=98+32) 아래
+    _save_button.custom_minimum_size = Vector2(140, 32)
+    _save_button.pressed.connect(_on_save_pressed)
+    _save_button.visible = false
+    add_child(_save_button)
+
+    _save_feedback_label = Label.new()
+    _save_feedback_label.position = Vector2(920, 142)
+    _save_feedback_label.size = Vector2(170, 24)
+    _save_feedback_label.add_theme_font_size_override("font_size", 14)
+    _save_feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    _save_feedback_label.modulate = Color(0.7, 1.0, 0.7)
+    _save_feedback_label.visible = false
+    add_child(_save_feedback_label)
+
+    _save_feedback_timer = Timer.new()
+    _save_feedback_timer.wait_time = 1.5
+    _save_feedback_timer.one_shot = true
+    _save_feedback_timer.timeout.connect(_on_save_feedback_timeout)
+    add_child(_save_feedback_timer)
+
+    # 타이틀로 — 테스트 편의용. 현재 런 종료하고 타이틀 복귀.
+    _to_title_button = Button.new()
+    _to_title_button.text = "타이틀로"
+    _to_title_button.position = Vector2(1100, 174)  # 저장 버튼 (y=136+32) 아래
+    _to_title_button.custom_minimum_size = Vector2(140, 32)
+    _to_title_button.pressed.connect(GameManager.return_to_title)
+    _to_title_button.visible = false
+    add_child(_to_title_button)
+
+
+func _refresh_save_button(phase: String) -> void:
+    if _save_button == null:
+        return
+    var show: bool = (phase == "map")
+    _save_button.visible = show
+    if _to_title_button != null:
+        _to_title_button.visible = show
+
+
+func _on_save_pressed() -> void:
+    var ok: bool = GameManager.save()
+    _save_feedback_label.text = "저장됨" if ok else "저장 실패"
+    _save_feedback_label.modulate = Color(0.7, 1.0, 0.7) if ok else Color(1.0, 0.7, 0.7)
+    _save_feedback_label.visible = true
+    _save_feedback_timer.start()
+
+
+func _on_save_feedback_timeout() -> void:
+    _save_feedback_label.visible = false

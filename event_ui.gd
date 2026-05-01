@@ -137,7 +137,6 @@ func _on_choice_pressed(idx: int) -> void:
 # dialogue 외 kind (choice / effect) 는 여기서 한번 더 무시.
 # 선택지 버튼은 자체 STOP 으로 GUI 입력에서 먼저 캐치 → 여기 안 옴.
 func _unhandled_input(event: InputEvent) -> void:
-    print(111)
     if EventManager.event_state.get("kind", "") != "dialogue":
         return
     if event is InputEventMouseButton:
