@@ -39,8 +39,11 @@ var _preview_intents_label: Label
 # --- 회귀 카운트 (맵 화면 우측 상단, 검증용 임시 라벨) ---
 var _recurrence_label: Label
 
-# --- 연구 데이터 잔액 (맵 화면 우측 상단, 회귀 카운트 아래) ---
+# --- 연구 데이터 잔액 (맵·연구 화면 우측 상단, 회귀 카운트 아래) ---
 var _balance_label: Label
+
+# --- 연구 화면 (research_screen 자식 동적 빌드) ---
+var _research_offer_root: HBoxContainer
 
 
 func _ready():
@@ -55,6 +58,7 @@ func _ready():
     _build_battle_preview()
     _build_recurrence_label()
     _build_balance_label()
+    _build_research_screen()
     _build_arm_inspector()           # 맵 위에 — 노드 버튼이 인스펙터 덮지 않도록
     _build_heroine_illustration()    # 맨 마지막 — 모든 위에 그려지도록
 
@@ -97,6 +101,7 @@ func _on_state_changed():
     _refresh_battle_preview()
     _refresh_recurrence_label(phase)
     _refresh_balance_label(phase)
+    _refresh_research_screen(phase)
 
     if phase == "combat":
         $battle_ui.begin_combat()
@@ -464,7 +469,7 @@ func _refresh_battle_preview():
 
 
 # ============================================================
-# 회귀 카운트 라벨 (임시 검증용. 맵 화면에서만 표시)
+# 회귀 카운트 라벨 (맵·연구 화면 우측 상단, 검증용 라벨)
 # ============================================================
 
 func _build_recurrence_label() -> void:
@@ -480,7 +485,7 @@ func _build_recurrence_label() -> void:
 func _refresh_recurrence_label(phase: String) -> void:
     if _recurrence_label == null:
         return
-    var show: bool = phase == "map"
+    var show: bool = phase == "map" or phase == "research"
     _recurrence_label.visible = show
     if not show:
         return
@@ -489,7 +494,7 @@ func _refresh_recurrence_label(phase: String) -> void:
 
 
 # ============================================================
-# 연구 데이터 잔액 라벨 (맵 화면 우측 상단, 회귀 카운트 아래)
+# 연구 데이터 잔액 라벨 (맵·연구 화면 우측 상단, 회귀 카운트 아래)
 # ============================================================
 
 func _build_balance_label() -> void:
@@ -505,9 +510,100 @@ func _build_balance_label() -> void:
 func _refresh_balance_label(phase: String) -> void:
     if _balance_label == null:
         return
-    var show: bool = phase == "map"
+    var show: bool = phase == "map" or phase == "research"
     _balance_label.visible = show
     if not show:
         return
     var data: int = RunManager.big_run_data.get("research_data", 0)
     _balance_label.text = "연구 데이터 %d" % data
+
+
+# ============================================================
+# 주인공의 연구 화면 — 회귀 직전 강화 페이즈.
+# RESEARCH_OPTIONS 풀에서 무작위 2개를 카드로 표시. 적용 / 회귀 버튼.
+# 시뮬 상태 직접 변경 X — RunManager.purchase / leave_research 만 호출.
+# ============================================================
+
+func _build_research_screen() -> void:
+    var screen: Control = $research_screen
+
+    var title := Label.new()
+    title.text = "주인공의 연구"
+    title.position = Vector2(440, 40)
+    title.size = Vector2(400, 40)
+    title.add_theme_font_size_override("font_size", 28)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    screen.add_child(title)
+
+    _research_offer_root = HBoxContainer.new()
+    _research_offer_root.position = Vector2(320, 180)
+    _research_offer_root.size = Vector2(640, 340)
+    _research_offer_root.add_theme_constant_override("separation", 40)
+    screen.add_child(_research_offer_root)
+
+    var leave_button := Button.new()
+    leave_button.text = "연구 종료 — 회귀"
+    leave_button.position = Vector2(520, 580)
+    leave_button.size = Vector2(240, 60)
+    leave_button.pressed.connect(RunManager.leave_research)
+    screen.add_child(leave_button)
+
+
+func _refresh_research_screen(phase: String) -> void:
+    if _research_offer_root == null:
+        return
+    if phase != "research":
+        return
+    for c in _research_offer_root.get_children():
+        c.queue_free()
+    var balance: int = RunManager.big_run_data.get("research_data", 0)
+    var offers: Array = RunManager.run_data.get("research_offers", [])
+    for i in range(offers.size()):
+        _research_offer_root.add_child(_make_research_offer_card(i, offers[i], balance))
+
+
+func _make_research_offer_card(idx: int, entry: Dictionary, balance: int) -> Control:
+    var item: Dictionary = GameData.RESEARCH_OPTIONS.get(entry.get("item_id", ""), {})
+
+    var card := Panel.new()
+    card.custom_minimum_size = Vector2(280, 320)
+
+    var col := VBoxContainer.new()
+    col.position = Vector2(16, 18)
+    col.size = Vector2(248, 284)
+    col.add_theme_constant_override("separation", 12)
+    card.add_child(col)
+
+    var name_lbl := Label.new()
+    name_lbl.text = item.get("name", "?")
+    name_lbl.add_theme_font_size_override("font_size", 18)
+    name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+    name_lbl.custom_minimum_size = Vector2(248, 0)
+    col.add_child(name_lbl)
+
+    var desc_lbl := Label.new()
+    desc_lbl.text = item.get("description", "")
+    desc_lbl.add_theme_font_size_override("font_size", 13)
+    desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+    desc_lbl.custom_minimum_size = Vector2(248, 90)
+    col.add_child(desc_lbl)
+
+    var price_lbl := Label.new()
+    price_lbl.text = "비용  %d 데이터" % entry.get("price", 0)
+    price_lbl.add_theme_font_size_override("font_size", 14)
+    col.add_child(price_lbl)
+
+    var btn := Button.new()
+    btn.custom_minimum_size = Vector2(248, 48)
+    var applied: bool = entry.get("applied", false)
+    var afford: bool = balance >= int(entry.get("price", 0))
+    btn.text = "적용됨" if applied else "적용"
+    btn.disabled = applied or not afford
+    btn.pressed.connect(_on_research_apply_pressed.bind(idx))
+    col.add_child(btn)
+
+    return card
+
+
+func _on_research_apply_pressed(idx: int) -> void:
+    RunManager.purchase(idx)

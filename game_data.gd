@@ -297,7 +297,7 @@ const TEST_MAP_GRAPH = {
     3: { "id": 3, "connections": [2, 4], "position": [0.7,  0.15], "enemy_id": "big_worm" },
     4: { "id": 4, "connections": [3, 6], "position": [0.95, 0.5],  "type": "research" },
     5: { "id": 5, "connections": [1, 6], "position": [0.3,  0.85], "type": "event" },
-    6: { "id": 6, "connections": [5, 4], "position": [0.7,  0.85], "enemy_id": "assault_trooper" },
+    6: { "id": 6, "connections": [5, 4], "position": [0.7,  0.85], "type": "repair" },
 }
 
 
@@ -321,6 +321,7 @@ const EVENTS = {
         "weight": 10,
         "lines": [
             {"speaker": "히로인", "text": "시작합니다."},
+            {"speaker": "히로인", "text": "환경을 확인합니다."},
         ],
     },
     "regression_speech": {
@@ -332,5 +333,44 @@ const EVENTS = {
         "lines": [
             {"speaker": "히로인", "text": "회귀합니다."},
         ],
+    },
+
+    # === Stage 2 (effect + chain + choice) — 수리 노드 chain ===
+    # node 6 (type "repair") 진입 → repair_choice (선택지) → 가지의 next →
+    # repair_arm/repair_body (effect) → repair_done_arm/body (dialogue) → chain 종료.
+    # chain_root_id = "repair_choice" — seen_events 카운트는 root 만.
+    "repair_choice": {
+        "id": "repair_choice",
+        "kind": "choice",
+        "trigger": {"type": "node_enter", "node_type": "repair"},
+        "once_per": "big_run",
+        "weight": 10,
+        "prompt": {"speaker": "히로인", "text": "어디를 수리할까."},
+        "choices": [
+            {"label": "팔 수리", "next": "repair_arm"},
+            {"label": "몸 수리", "next": "repair_body"},
+        ],
+    },
+    "repair_arm": {
+        "id": "repair_arm",
+        "kind": "effect",
+        "effects": [{"type": "arm_durability_boost", "params": {"amount": 20}}],
+        "next": "repair_done_arm",
+    },
+    "repair_body": {
+        "id": "repair_body",
+        "kind": "effect",
+        "effects": [{"type": "body_boost", "params": {"amount": 20}}],
+        "next": "repair_done_body",
+    },
+    "repair_done_arm": {
+        "id": "repair_done_arm",
+        "kind": "dialogue",
+        "lines": [{"speaker": "히로인", "text": "팔 수리 완료."}],
+    },
+    "repair_done_body": {
+        "id": "repair_done_body",
+        "kind": "dialogue",
+        "lines": [{"speaker": "히로인", "text": "몸 수리 완료."}],
     },
 }

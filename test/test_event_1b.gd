@@ -96,7 +96,12 @@ func _run_scenario() -> bool:
     ok = _check("intro 발화 — event_screen.visible = true",
         event_screen.visible) and ok
 
-    # ========== 2. 라인 advance → 종료 → 맵 노출 ==========
+    # ========== 2. 라인 1 → 2 → 종료 → 맵 노출 (intro_speech 가 2 라인) ==========
+    EventManager.advance_line()
+    await _shot("1b_01b_intro_line2")
+    ok = _check("intro 라인 2 표시 — line_idx = 1",
+        EventManager.event_state.get("line_idx") == 1) and ok
+
     EventManager.advance_line()
     await _shot("1b_02_after_intro_map")
 

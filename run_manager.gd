@@ -307,13 +307,13 @@ func move_to_node(target_id: int) -> bool:
         _enter_research()
         return true
 
-    # 이벤트 노드 진입 — EventManager 위임. 트리거 매치 시 phase = "event" 전이.
-    # 매치 없으면 (예: once_per 필터 통과 못한 경우) 평범한 노드처럼 통과.
-    if target.get("type") == "event":
-        var event_id: String = EventManager._resolve_event_for_node(target)
-        if event_id != "":
-            _begin_event_phase(event_id)
-            return true
+    # 노드 type 이 이벤트 풀에 매치되면 EventManager 위임. research 외 모든 type
+    # ("event" / "repair" 등) 에 대해 시도. 매치 없으면 (once_per 필터 등) 평범한
+    # 노드처럼 통과.
+    var event_id: String = EventManager._resolve_event_for_node(target)
+    if event_id != "":
+        _begin_event_phase(event_id)
+        return true
 
     # 적이 점거한 노드면 전투 프리뷰로 전환
     if target.get("enemy_id") != null:
@@ -417,6 +417,24 @@ func purchase(offer_idx: int) -> bool:
     entry["applied"] = true
     state_changed.emit()
     return true
+
+
+# Type 1 이벤트 액션 디스패처. EventManager._dispatch_effect 가 호출.
+# 안 4 §0-E — escape 없음. 신규 효과 = match 분기 + _apply_<type> 신설 강제.
+# (다음 차로 — 안 4 §9.7: _apply_research_effect 와 통합.)
+func apply_event_action(action: Dictionary) -> bool:
+    var type_name: String = action.get("type", "")
+    var params: Dictionary = action.get("params", {})
+    match type_name:
+        "body_boost":
+            return _apply_body_boost(params)
+        "arm_attack_boost":
+            return _apply_arm_attack_boost(params)
+        "arm_durability_boost":
+            return _apply_arm_durability_boost(params)
+        _:
+            push_warning("apply_event_action: 알 수 없는 type '%s'" % type_name)
+            return false
 
 
 # 효과 타입 디스패처. 새 효과 추가 시 여기에 분기 한 줄 + _apply_<type> 함수 추가.

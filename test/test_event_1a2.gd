@@ -79,7 +79,15 @@ func _run_scenario() -> bool:
     ok = _check("event_state.chain_root_id = 'intro_speech'",
         EventManager.event_state.get("chain_root_id") == "intro_speech") and ok
 
-    # 1라인 advance → 자동 종료
+    # 라인 1 advance — 두 번째 라인으로 (intro_speech 가 2 라인)
+    EventManager.advance_line()
+    _dump_event_state("intro line 1 → 2 후")
+    ok = _check("advance 1회 → line_idx = 1",
+        EventManager.event_state.get("line_idx") == 1) and ok
+    ok = _check("advance 1회 후 phase = 'event' 유지",
+        RunManager.run_data.get("phase") == "event") and ok
+
+    # 라인 2 advance → 자동 종료
     EventManager.advance_line()
     _dump_event_state("intro 종료 후")
     _dump_seen_events("intro 종료 후")
