@@ -179,14 +179,15 @@ func _resolve_chain() -> void:
 # ============================================================
 # 트리거 평가 — 어떤 이벤트가 발생할지 결정
 # ============================================================
-# 필터: trigger.type 매치 → trigger 별 추가 매치 조건 → once_per → 가중치 추첨.
-# 매치 없으면 "" 반환 (이벤트 미발생).
+# 글로벌 트리거 풀에서 매치 + once_per 필터 + 가중치 추첨.
+# 타일 슬롯이 직접 호출하는 이벤트 (regression_speech / repair_choice 등) 는
+# trigger 필드 없이 라이브러리 결로만 등재 — 여기서 매치되지 않음 (의도).
 #
 # 트리거 풀:
-#   - "node_enter": context = {"node_type": String}. trigger.node_type 매치.
-#   - "run_start":  context 무관. 추가 매치 없음.
+#   - "run_start":  context 무관. 매 내부 런 시작 직후.
+#   - "on_rest":    context 무관. RunManager.rest() 가 호출.
 
-func resolve_event(trigger_type: String, context: Dictionary) -> String:
+func resolve_event(trigger_type: String, _context: Dictionary) -> String:
     var candidates: Array = []
     var weights: Array = []
     var total_weight: int = 0
@@ -195,20 +196,18 @@ func resolve_event(trigger_type: String, context: Dictionary) -> String:
         var trigger: Dictionary = def.get("trigger", {})
         if trigger.get("type", "") != trigger_type:
             continue
-        # 트리거별 추가 매치 조건
-        match trigger_type:
-            "node_enter":
-                if trigger.get("node_type", "") != context.get("node_type", ""):
-                    continue
-            "run_start":
-                pass  # 추가 조건 없음
-            _:
-                push_warning("resolve_event: 알 수 없는 trigger type '%s'" % trigger_type)
-                continue
-        # once_per 필터
-        if def.get("once_per", "") == "big_run":
+        if trigger_type != "run_start" and trigger_type != "on_rest":
+            push_warning("resolve_event: 알 수 없는 trigger type '%s'" % trigger_type)
+            continue
+        # once_per 필터 — big_run (큰 런 통과) / internal_run (회차 1회).
+        var op: String = def.get("once_per", "")
+        if op == "big_run":
             var seen: Dictionary = RunManager.big_run_data.get("seen_events", {})
             if seen.get(id, 0) > 0:
+                continue
+        elif op == "internal_run":
+            var seen_run: Dictionary = RunManager.run_data.get("seen_this_run", {})
+            if seen_run.get(id, false):
                 continue
         var w: int = int(def.get("weight", 1))
         candidates.append(id)
@@ -225,14 +224,6 @@ func resolve_event(trigger_type: String, context: Dictionary) -> String:
         if pick < acc:
             return candidates[i]
     return candidates[-1]
-
-
-# 노드 진입용 wrapper. RunManager.move_to_node 의 type "event" 분기에서 호출.
-func _resolve_event_for_node(node: Dictionary) -> String:
-    var node_type: String = node.get("type", "")
-    if node_type == "":
-        return ""
-    return resolve_event("node_enter", {"node_type": node_type})
 
 
 # ============================================================

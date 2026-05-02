@@ -37,11 +37,6 @@ func _new_big_run() -> void:
         "next_arm_instance_id": 1,
         "arm_inventory_max": 6,
 
-        # 맵 그래프. big 쪽 맵은 _start_internal_run 에서 어차피 덮어씌워지지만
-        # 스키마 일관성을 위해 여기서도 초기화해둔다.
-        "map": _build_initial_map(),
-        "current_node_id": 1,
-
         # 큰 런 메타. 회귀 횟수 등 내부 런 경계를 넘어 지속되는 상태.
         "meta": {
             "big_run_count": 0,
@@ -61,12 +56,18 @@ func _new_big_run() -> void:
 
 func _start_internal_run() -> void:
     run_data = big_run_data.duplicate(true)
-    # 맵·현재 노드는 내부 런 고유. 복제 후 덮어쓴다.
-    run_data["map"] = _build_initial_map()
-    run_data["current_node_id"] = 1
+    # 그리드 회차 상태는 내부 런 고유. 복제 후 덮어쓴다.
+    run_data["player_pos"] = GameData.SPAWN_POS
+    run_data["day"] = 1
+    run_data["day_max"] = GameData.DAY_MAX
+    run_data["actions_per_day"] = GameData.ACTIONS_PER_DAY
+    run_data["actions_remaining"] = GameData.ACTIONS_PER_DAY
+    run_data["visited_tiles"] = { GameData.SPAWN_POS: true }
+    run_data["explored_tiles"] = {}
+    run_data["seen_this_run"] = {}
+    run_data["pending_combat"] = {}
     run_data["phase"] = "map"
-    if run_data["map"].has(run_data["current_node_id"]):
-        run_data["map"][run_data["current_node_id"]]["visited"] = true
+
     state_changed.emit()
     # run_start 트리거 평가 — 매치 시 phase = "event" 전이.
     var run_start_event_id: String = EventManager.resolve_event("run_start", {})
@@ -75,7 +76,7 @@ func _start_internal_run() -> void:
 
 
 # 이벤트 진입 — phase 전이 + EventManager 위임 + state_changed.
-# move_to_node 의 type "event" 분기와 _start_internal_run 의 run_start 트리거가 공용.
+# 타일 슬롯 / run_start / on_rest 트리거 공용.
 func _begin_event_phase(event_id: String) -> void:
     run_data["phase"] = "event"
     EventManager.begin_event(event_id, {})
@@ -202,12 +203,13 @@ func _on_battle_ended(result: Dictionary) -> void:
     if result.get("result") == "defeat":
         run_data["phase"] = "lose"
     else:
-        # 승리 — 드롭 가산
+        # 승리 — 드롭 가산 + 조우 슬롯 소비 기록 (once_per: internal_run).
         big_run_data["research_data"] += result.get("drop", 0)
-        # 현재 노드의 적 제거
-        var current_id = run_data.get("current_node_id")
-        if current_id != null and run_data.get("map", {}).has(current_id):
-            run_data["map"][current_id]["enemy_id"] = null
+        var pending: Dictionary = run_data.get("pending_combat", {})
+        var encounter_id: String = pending.get("encounter_id", "")
+        if encounter_id != "":
+            run_data["seen_this_run"][encounter_id] = true
+        run_data["pending_combat"] = {}
         run_data["phase"] = "reward"
 
     state_changed.emit()
@@ -223,10 +225,22 @@ func _on_event_resolved(result: Dictionary) -> void:
     if event_id == "":
         push_warning("_on_event_resolved: 빈 event_id")
         return
+    # 큰 런 통계 카운터 — 회귀 통과해 누적.
     var seen: Dictionary = big_run_data.get("seen_events", {})
     seen[event_id] = seen.get(event_id, 0) + 1
     big_run_data["seen_events"] = seen
-    run_data["phase"] = "map"
+    # 글로벌 트리거 이벤트가 once_per: "internal_run" 이면 회차 카운터도 박음
+    # (resolve_event 가 같은 회차 재발화를 필터). 슬롯 트리거는 _check_on_enter 가
+    # 이미 사전에 박았으므로 여기 갱신은 사실상 글로벌 트리거 (run_start / on_rest) 용.
+    var def: Dictionary = GameData.EVENTS.get(event_id, {})
+    if def.get("once_per", "") == "internal_run":
+        run_data.get("seen_this_run", {})[event_id] = true
+    # 휴식 중 발화한 이벤트면 종료 후 휴식 마무리.
+    if run_data.get("rest_pending", false):
+        run_data["rest_pending"] = false
+        _finalize_rest()
+    else:
+        run_data["phase"] = "map"
     state_changed.emit()
 
 
@@ -246,90 +260,180 @@ func _apply_arm_result(side: String, arm_result) -> void:
 
 
 # ============================================================
-# 맵 그래프
+# 그리드 — 지형 / 통과
 # ============================================================
 
-# 템플릿(GameData.TEST_MAP_GRAPH) 을 깊은 복제하여 런타임 맵 객체로 만든다.
-# 각 노드에 visited = false 를 부여.
-func _build_initial_map() -> Dictionary:
-    var result: Dictionary = {}
-    for id in GameData.TEST_MAP_GRAPH.keys():
-        var node: Dictionary = GameData.TEST_MAP_GRAPH[id].duplicate(true)
-        node["visited"] = false
-        result[id] = node
-    return result
+func _get_terrain_at(pos: Vector2i) -> String:
+    var rows: Array = GameData.WORLD_TERRAIN
+    if pos.y < 0 or pos.y >= rows.size():
+        return ""
+    var row: String = rows[pos.y]
+    if pos.x < 0 or pos.x >= row.length():
+        return ""
+    return row[pos.x]
+
+
+func _is_passable(pos: Vector2i) -> bool:
+    var t: String = _get_terrain_at(pos)
+    if t == "":
+        return false
+    return GameData.TERRAIN_RULES.get(t, {}).get("passable", false)
 
 
 # --- 조회자 ---
 
-func get_current_node() -> Dictionary:
-    var id = run_data.get("current_node_id")
-    if id == null:
-        return {}
-    return run_data.get("map", {}).get(id, {})
+func get_terrain_name(pos: Vector2i) -> String:
+    return GameData.TERRAIN_RULES.get(_get_terrain_at(pos), {}).get("name", "")
 
 
-func get_node_by_id(id: int) -> Dictionary:
-    return run_data.get("map", {}).get(id, {})
+func get_tile_encounter(pos: Vector2i) -> Dictionary:
+    return GameData.TILE_ENCOUNTERS.get(pos, {})
 
 
-# --- 이동 ---
-
-# 현재 노드의 인접(connections) 중 하나로 이동. 유효성 검사 포함.
-# 이동 후 대상 노드에 enemy_id 가 있으면 phase 를 "battle_preview" 로 전환.
-# 반환: 이동 성공 여부.
-func move_to_node(target_id: int) -> bool:
-    # 이벤트 활성 중 외부 이동 거부 (안 4 §0-H, on/off 배타 게이팅).
-    if run_data.get("phase") == "event":
-        push_warning("move_to_node: 이벤트 중 이동 불가 (phase = 'event')")
-        return false
-
-    var current: Dictionary = get_current_node()
-    if current.is_empty():
-        push_warning("move_to_node: 현재 노드 없음")
-        return false
-
-    var connections: Array = current.get("connections", [])
-    if target_id not in connections:
-        push_warning("move_to_node: %d 는 현재 노드(%d) 의 인접이 아님. 인접: %s" % [
-            target_id, current.get("id", -1), connections])
-        return false
-
-    run_data["current_node_id"] = target_id
-    var target: Dictionary = run_data["map"].get(target_id, {})
-    if not target.is_empty():
-        target["visited"] = true
-
-    # 연구 노드 진입 — 회귀 직전 주인공의 연구 페이즈로 전환.
-    # phase = "research", run_data["research_offers"] 에 무작위 2개 옵션 생성.
-    # (휴면 중인 type "boss" 는 진 엔딩 결전 도입 시 부활 — 별도 분기로 갈 예정.)
-    if target.get("type") == "research":
-        _enter_research()
+# 슬롯 once_per 필터. 통과(발화 가능) → true.
+func _slot_passes_filters(slot: Dictionary) -> bool:
+    var op: String = slot.get("once_per", "")
+    if op == "":
         return true
-
-    # 노드 type 이 이벤트 풀에 매치되면 EventManager 위임. research 외 모든 type
-    # ("event" / "repair" 등) 에 대해 시도. 매치 없으면 (once_per 필터 등) 평범한
-    # 노드처럼 통과.
-    var event_id: String = EventManager._resolve_event_for_node(target)
-    if event_id != "":
-        _begin_event_phase(event_id)
+    var key: String = slot.get("id", "")
+    if key == "":
         return true
+    match op:
+        "internal_run":
+            return not run_data.get("seen_this_run", {}).get(key, false)
+        "big_run":
+            return big_run_data.get("seen_events", {}).get(key, 0) <= 0
+        _:
+            push_warning("_slot_passes_filters: 알 수 없는 once_per '%s'" % op)
+            return true
 
-    # 적이 점거한 노드면 전투 프리뷰로 전환
-    if target.get("enemy_id") != null:
-        run_data["phase"] = "battle_preview"
+
+# 진입 슬롯 디스패처. on_enter 슬롯 평가 + 필터 통과 시 kind 별 분기.
+func _check_on_enter(pos: Vector2i) -> void:
+    var enc: Dictionary = get_tile_encounter(pos)
+    if enc.is_empty():
+        return
+    var slot: Dictionary = enc.get("on_enter", {})
+    if slot.is_empty():
+        return
+    if not _slot_passes_filters(slot):
+        return
+    var kind: String = slot.get("kind", "")
+    match kind:
+        "event":
+            run_data["seen_this_run"][slot.get("id", "")] = true
+            _begin_event_phase(slot.get("event_id", ""))
+        "combat":
+            run_data["seen_this_run"][slot.get("id", "")] = true
+            run_data["pending_combat"] = {
+                "enemy_id": slot.get("enemy_id", ""),
+                "encounter_id": slot.get("id", ""),
+            }
+            run_data["phase"] = "battle_preview"
+        "research":
+            run_data["seen_this_run"][slot.get("id", "")] = true
+            _enter_research()
+        _:
+            push_warning("_check_on_enter: 미지원 kind '%s'" % kind)
+
+
+# 탐험 슬롯 디스패처. explore 슬롯 평가 + 필터 통과 시 kind 별 분기.
+# 현재는 event kind 만. (탐험 기반 combat / research 도 같은 골격으로 확장 가능.)
+func _check_on_explore(pos: Vector2i) -> bool:
+    var enc: Dictionary = get_tile_encounter(pos)
+    if enc.is_empty():
+        return false
+    var slot: Dictionary = enc.get("explore", {})
+    if slot.is_empty():
+        return false
+    if not _slot_passes_filters(slot):
+        return false
+    var kind: String = slot.get("kind", "")
+    match kind:
+        "event":
+            run_data["seen_this_run"][slot.get("id", "")] = true
+            _begin_event_phase(slot.get("event_id", ""))
+            return true
+        _:
+            push_warning("_check_on_explore: 미지원 kind '%s'" % kind)
+            return false
+
+
+# --- 행동: 이동 / 탐험 / 휴식 -----------------------------------------------
+
+# 4방향 이동. dir ∈ {(±1,0),(0,±1)}. 통과 가능 + 행동 충분 시 이동.
+# 이동 후 on_enter 슬롯 평가. 행동 0 도달 시 자동 휴식.
+func try_move(dir: Vector2i) -> bool:
+    if run_data.get("phase") != "map":
+        return false
+    if run_data.get("actions_remaining", 0) < 1:
+        return false
+    var target: Vector2i = run_data["player_pos"] + dir
+    if not _is_passable(target):
+        return false
+
+    run_data["player_pos"] = target
+    run_data["actions_remaining"] -= 1
+    run_data["visited_tiles"][target] = true
+
+    _check_on_enter(target)
+
+    # 진입 트리거가 phase 를 바꿨으면 그쪽 흐름 우선. map 에 그대로면 0 액션 체크.
+    if run_data.get("phase") == "map" and run_data["actions_remaining"] <= 0:
+        rest()
 
     state_changed.emit()
     return true
 
 
+# 현재 칸 탐험. 같은 회차 1회 한정 (explored_tiles 영속).
+func try_explore() -> bool:
+    if run_data.get("phase") != "map":
+        return false
+    if run_data.get("actions_remaining", 0) < 1:
+        return false
+    var pos: Vector2i = run_data["player_pos"]
+    if run_data["explored_tiles"].get(pos, false):
+        return false
+
+    run_data["explored_tiles"][pos] = true
+    run_data["actions_remaining"] -= 1
+    _check_on_explore(pos)
+
+    if run_data.get("phase") == "map" and run_data["actions_remaining"] <= 0:
+        rest()
+
+    state_changed.emit()
+    return true
+
+
+# 휴식. 어느 칸이든 호출 가능. 일자 +1 + 행동 리셋 + on_rest 이벤트 추첨.
+# 이벤트 발화 시 chain 종료 후 _finalize_rest 가 일자/행동 갱신.
+func rest() -> void:
+    if run_data.get("phase") != "map":
+        return
+    var rest_event_id: String = EventManager.resolve_event("on_rest", {})
+    if rest_event_id != "":
+        run_data["rest_pending"] = true
+        _begin_event_phase(rest_event_id)
+        return
+    _finalize_rest()
+
+
+func _finalize_rest() -> void:
+    run_data["day"] = run_data.get("day", 1) + 1
+    run_data["actions_remaining"] = run_data.get("actions_per_day", GameData.ACTIONS_PER_DAY)
+    run_data["phase"] = "map"
+    state_changed.emit()
+
+
 # --- 전투 진입 (battle_preview 에서 "전투 시작" 버튼이 호출) ---
 
 func start_combat() -> void:
-    var current: Dictionary = get_current_node()
-    var enemy_id = current.get("enemy_id")
-    if enemy_id == null:
-        push_warning("start_combat: 현재 노드에 enemy_id 없음")
+    var pending: Dictionary = run_data.get("pending_combat", {})
+    var enemy_id = pending.get("enemy_id", "")
+    if enemy_id == "":
+        push_warning("start_combat: pending_combat 없음")
         return
     BattleManager.begin_battle({
         "enemy_id": enemy_id,
@@ -353,7 +457,7 @@ func return_to_map() -> void:
 # 주인공의 연구 (회귀 직전 강화 페이즈)
 # ============================================================
 # 풀: GameData.RESEARCH_OPTIONS (3종)
-# 진입: move_to_node 가 type "research" 노드에서 호출
+# 진입: _check_on_enter 의 kind "research" 분기
 # 흐름: _enter_research → (UI 가 purchase 호출 0~2회) → leave_research → 회귀
 # 영속 상태 변경 단일 출처는 RunManager. UI 는 명령만 보냄.
 
@@ -421,7 +525,6 @@ func purchase(offer_idx: int) -> bool:
 
 # Type 1 이벤트 액션 디스패처. EventManager._dispatch_effect 가 호출.
 # 안 4 §0-E — escape 없음. 신규 효과 = match 분기 + _apply_<type> 신설 강제.
-# (다음 차로 — 안 4 §9.7: _apply_research_effect 와 통합.)
 func apply_event_action(action: Dictionary) -> bool:
     var type_name: String = action.get("type", "")
     var params: Dictionary = action.get("params", {})
@@ -563,6 +666,10 @@ func _register_console_commands() -> void:
         "팔 카드 교체. 인자: <instance_id> <index> <card_id>")
     LimboConsole.register_command(_cmd_leave_research, "leave_research", "연구 페이즈 종료 (회귀)")
     LimboConsole.register_command(_cmd_purchase, "purchase", "연구 옵션 적용. 인자: <offer_idx>")
+    LimboConsole.register_command(_cmd_move, "move",
+        "그리드 이동. 인자: <dx> <dy> (예: move 1 0 = 동쪽)")
+    LimboConsole.register_command(_cmd_explore, "explore", "현재 칸 탐험")
+    LimboConsole.register_command(_cmd_rest, "rest", "휴식 — 일자 +1, 행동 리셋")
 
 
 func _cmd_show_run() -> void:
@@ -595,3 +702,22 @@ func _cmd_purchase(idx: int) -> void:
         LimboConsole.info("purchase(%d): 성공" % idx)
     else:
         LimboConsole.error("purchase(%d): 실패 (경고 로그 확인)" % idx)
+
+
+func _cmd_move(dx: int, dy: int) -> void:
+    if try_move(Vector2i(dx, dy)):
+        LimboConsole.info("이동 → %s, 행동 %d" % [
+            run_data["player_pos"], run_data["actions_remaining"]])
+    else:
+        LimboConsole.error("이동 실패")
+
+
+func _cmd_explore() -> void:
+    if try_explore():
+        LimboConsole.info("탐험 완료")
+    else:
+        LimboConsole.error("탐험 실패")
+
+
+func _cmd_rest() -> void:
+    rest()

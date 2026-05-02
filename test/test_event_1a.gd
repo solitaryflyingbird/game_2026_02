@@ -1,16 +1,14 @@
 extends Node
 
-# Stage 1A — EventManager + dialogue 시뮬 자동 검증.
-# 안 4 §6 시나리오 1 + 롤아웃 §2 검증 시퀀스를 자동화.
-#
-# 실행: godot --headless --path "<프로젝트>" res://test/test_event_1a.tscn
+# Stage 1A — EventManager + dialogue 시뮬 자동 검증 (그리드 리뉴얼 결).
+# 시나리오: spawn (1,6) → 동쪽 2칸 → 타일 (3,6) on_enter 의 regression_speech.
 # 종료 코드: 0 = PASS, 1 = FAIL.
 
-var _checks: Array = []  # [{name: String, ok: bool, detail: String}]
+var _checks: Array = []
 
 
 func _ready() -> void:
-    print("=== Stage 1A 자동 검증 시작 ===")
+    print("=== Stage 1A 자동 검증 시작 (그리드) ===")
     var ok := await _run_scenario()
     _print_summary()
     if ok:
@@ -45,9 +43,7 @@ func _print_summary() -> void:
 func _run_scenario() -> bool:
     var all_ok: bool = true
 
-    # === 1. 새 게임 시작 + run_start 이벤트 소비 ===
-    # 1A-2 이후 run_start 트리거로 intro_speech 자동 발화. 1A 본 시나리오는
-    # node_enter 트리거 흐름이므로, intro 는 advance 로 미리 닫고 진입.
+    # === 1. 새 게임 시작 + intro 소비 ===
     GameManager.start_run()
     await get_tree().process_frame
     while not EventManager.event_state.is_empty():
@@ -63,17 +59,25 @@ func _run_scenario() -> bool:
         se != null and (se is Dictionary)
         and (se as Dictionary).get("regression_speech", 0) == 0) and all_ok
 
-    # === 2. event 노드 (5번) 으로 이동 ===
-    var moved: bool = RunManager.move_to_node(5)
-    all_ok = _check("event 노드 move 성공", moved) and all_ok
+    all_ok = _check("초기 player_pos = SPAWN_POS",
+        RunManager.run_data.get("player_pos") == GameData.SPAWN_POS) and all_ok
+
+    # === 2. 동 1칸 이동 — 빈 칸 (2,6), 이벤트 없음 ===
+    var moved1: bool = RunManager.try_move(Vector2i(1, 0))
+    all_ok = _check("(2,6) 으로 이동 성공", moved1) and all_ok
+    all_ok = _check("(2,6) 진입 — 이벤트 미발화 (phase = 'map')",
+        RunManager.run_data.get("phase") == "map") and all_ok
+
+    # === 3. 동 1칸 이동 — (3,6) 에 regression_speech 발화 ===
+    var moved2: bool = RunManager.try_move(Vector2i(1, 0))
+    all_ok = _check("(3,6) 으로 이동 성공", moved2) and all_ok
     all_ok = _check("phase = 'event' 전이",
         RunManager.run_data.get("phase") == "event",
         "phase = %s" % str(RunManager.run_data.get("phase"))) and all_ok
     all_ok = _check("event_state 활성",
         not EventManager.event_state.is_empty()) and all_ok
     all_ok = _check("event_state.kind = 'dialogue'",
-        EventManager.event_state.get("kind") == "dialogue",
-        "kind = %s" % str(EventManager.event_state.get("kind"))) and all_ok
+        EventManager.event_state.get("kind") == "dialogue") and all_ok
     all_ok = _check("event_state.event_id = 'regression_speech'",
         EventManager.event_state.get("event_id") == "regression_speech") and all_ok
     all_ok = _check("event_state.line_idx = 0",
@@ -81,45 +85,57 @@ func _run_scenario() -> bool:
     all_ok = _check("event_state.chain_root_id = event_id",
         EventManager.event_state.get("chain_root_id") == "regression_speech") and all_ok
 
-    # === 3. 이벤트 활성 중 외부 move 거부 ===
-    var rejected: bool = RunManager.move_to_node(1)
-    all_ok = _check("이벤트 중 move_to_node 거부",
-        not rejected) and all_ok
+    # === 4. 이벤트 활성 중 외부 try_move 거부 ===
+    var rejected: bool = RunManager.try_move(Vector2i(-1, 0))
+    all_ok = _check("이벤트 중 try_move 거부", not rejected) and all_ok
     all_ok = _check("거부 후 phase 유지 = 'event'",
         RunManager.run_data.get("phase") == "event") and all_ok
 
-    # === 4. 라인 advance → 자동 종료 (regression_speech 는 1 라인) ===
+    # === 5. advance_line → 자동 종료 (regression 1라인) ===
     EventManager.advance_line()
     all_ok = _check("종료 후 event_state = {}",
         EventManager.event_state.is_empty()) and all_ok
     all_ok = _check("종료 후 phase = 'map'",
-        RunManager.run_data.get("phase") == "map",
-        "phase = %s" % str(RunManager.run_data.get("phase"))) and all_ok
+        RunManager.run_data.get("phase") == "map") and all_ok
     all_ok = _check("seen_events[regression_speech] = 1",
         RunManager.big_run_data.get("seen_events", {}).get("regression_speech", 0) == 1) and all_ok
 
-    # === 6. once_per 'big_run' — 같은 큰 런 안 재진입 시 미발생 ===
-    var moved2: bool = RunManager.move_to_node(1)
-    all_ok = _check("이벤트 종료 후 일반 move 가능", moved2) and all_ok
-    var moved3: bool = RunManager.move_to_node(5)
-    all_ok = _check("event 노드 재진입 move 성공", moved3) and all_ok
-    all_ok = _check("once_per: 재진입 시 phase 'map' 유지 (이벤트 미발생)",
-        RunManager.run_data.get("phase") == "map",
-        "phase = %s" % str(RunManager.run_data.get("phase"))) and all_ok
+    # === 6. once_per: big_run — 같은 큰 런 안 재진입 시 미발생 ===
+    RunManager.try_move(Vector2i(-1, 0))   # (3,6) → (2,6)
+    RunManager.try_move(Vector2i(-1, 0))   # (2,6) → (1,6) 스폰
+    RunManager.try_move(Vector2i(1, 0))    # (1,6) → (2,6)
+    RunManager.try_move(Vector2i(1, 0))    # (2,6) → (3,6) 재진입
+    all_ok = _check("once_per: 재진입 시 phase 'map' 유지",
+        RunManager.run_data.get("phase") == "map") and all_ok
     all_ok = _check("once_per: event_state 비활성 유지",
         EventManager.event_state.is_empty()) and all_ok
 
-    # === 7. 회귀 후에도 once_per 'big_run' 유지 ===
+    # === 7. 회귀 후 — 슬롯 once_per: internal_run 이라 재발화 ===
     RunManager.end_internal_run("cleared")
-    all_ok = _check("회귀 후 seen_events 유지",
-        RunManager.big_run_data.get("seen_events", {}).get("regression_speech", 0) == 1) and all_ok
-    all_ok = _check("회귀 후 phase = 'map'",
+    # seen_events 누적 카운터는 회귀 통과 (빅 런 통계). 슬롯 필터는 seen_this_run.
+    all_ok = _check("회귀 후 seen_events 누적 유지",
+        RunManager.big_run_data.get("seen_events", {}).get("regression_speech", 0) >= 1) and all_ok
+    # 회귀 직후 _start_internal_run 이 run_start → intro 매 회차 재발화 (phase=event).
+    all_ok = _check("회귀 후 phase = 'event' (intro 재발화)",
+        RunManager.run_data.get("phase") == "event") and all_ok
+    all_ok = _check("회귀 후 event_id = 'intro_speech'",
+        EventManager.event_state.get("event_id") == "intro_speech") and all_ok
+    all_ok = _check("회귀 후 player_pos = SPAWN_POS",
+        RunManager.run_data.get("player_pos") == GameData.SPAWN_POS) and all_ok
+    # intro 소비
+    while not EventManager.event_state.is_empty():
+        EventManager.advance_line()
+    await get_tree().process_frame
+    all_ok = _check("intro 소비 후 phase = 'map'",
         RunManager.run_data.get("phase") == "map") and all_ok
-    all_ok = _check("회귀 후 current_node_id = 1",
-        RunManager.run_data.get("current_node_id") == 1) and all_ok
-    var moved4: bool = RunManager.move_to_node(5)
-    all_ok = _check("회귀 후 event 노드 이동 성공", moved4) and all_ok
-    all_ok = _check("회귀 후에도 once_per 회피 — 이벤트 미발생",
-        RunManager.run_data.get("phase") == "map") and all_ok
+    all_ok = _check("새 회차 — seen_this_run 비움",
+        RunManager.run_data.get("seen_this_run", {}).is_empty()) and all_ok
+
+    RunManager.try_move(Vector2i(1, 0))    # spawn → (2,6)
+    RunManager.try_move(Vector2i(1, 0))    # (2,6) → (3,6) 회귀 후 재진입
+    all_ok = _check("회귀 후 (3,6) 진입 — regression 재발화 (phase=event)",
+        RunManager.run_data.get("phase") == "event") and all_ok
+    all_ok = _check("회귀 후 event_id = 'regression_speech'",
+        EventManager.event_state.get("event_id") == "regression_speech") and all_ok
 
     return all_ok

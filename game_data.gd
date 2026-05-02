@@ -274,41 +274,107 @@ const ENEMIES = {
 }
 
 
-# --- 테스트 맵 그래프 (예시노드.png 구조) ----------------------------------
-# 6 노드 육각형 사이클. 양방향 엣지.
+# --- 그리드 월드 (좌표 기반 맵) ---------------------------------------------
+# 16 × 12 그리드. 각 칸은 지형 코드 (G/P/F/C/W) 1자.
+# 외곽 한 줄은 벽 (F = 숲) — 통과 불가.
 #
-#        [2]───[3]
-#       /        \
-#     [1]        [4]
-#       \        /
-#        [5]───[6]
-#
-# 나중에 type / layer / floor_num / position 등 필드가 노드별로 붙을 예정.
-# 지금은 순수 그래프 구조만.
+# 지형 규칙: TERRAIN_RULES — passable 여부.
+# 칸 위 조우: TILE_ENCOUNTERS — Vector2i 키. on_enter / explore 슬롯.
+# 스폰: SPAWN_POS. 행동/일자: ACTIONS_PER_DAY / DAY_MAX.
 
-# position 은 0.0~1.0 정규화 좌표 [x, y]. UI 가 맵 영역 크기에 맞춰 투영.
-# enemy_id 가 있는 노드는 조우 시 해당 몬스터와 전투. 없으면 빈 노드 (시작점 등).
-# type == "research" 노드는 진입 시 phase = "research" 로 전환. 회귀 직전
-# 주인공의 연구 페이즈 (RESEARCH_OPTIONS 에서 무작위 2개 제시).
-# 진짜 보스 전투 (type == "boss") 는 진 엔딩 결전 도입 시 부활 — 현재는 휴면.
-const TEST_MAP_GRAPH = {
-    1: { "id": 1, "connections": [2, 5], "position": [0.05, 0.5] },
-    2: { "id": 2, "connections": [1, 3], "position": [0.3,  0.15], "enemy_id": "larva" },
-    3: { "id": 3, "connections": [2, 4], "position": [0.7,  0.15], "enemy_id": "big_worm" },
-    4: { "id": 4, "connections": [3, 6], "position": [0.95, 0.5],  "type": "research" },
-    5: { "id": 5, "connections": [1, 6], "position": [0.3,  0.85], "type": "event" },
-    6: { "id": 6, "connections": [5, 4], "position": [0.7,  0.85], "type": "repair" },
+const WORLD_TERRAIN: Array = [
+    "FFFFFFFFFFFFFFFF",
+    "FGGGGGGGGGGGGGGF",
+    "FGGGGGGGGGGGGGGF",
+    "FGGGGGGGGGGGGGGF",
+    "FGGGGGGGGGGGGGGF",
+    "FGGGGGGGGGGGGGGF",
+    "FGGGGGGGGGGGGGGF",
+    "FGGGGGGGGGGGGGGF",
+    "FGGGGGGGGGGGGGGF",
+    "FGGGGGGGGGGGGGGF",
+    "FGGGGGGGGGGGGGGF",
+    "FFFFFFFFFFFFFFFF",
+]
+
+const TERRAIN_RULES: Dictionary = {
+    "G": { "name": "풀밭", "passable": true },
+    "P": { "name": "길",   "passable": true },
+    "F": { "name": "숲",   "passable": false },
+    "C": { "name": "절벽", "passable": false },
+    "W": { "name": "물",   "passable": false },
+}
+
+# 스폰 위치 — 거점.
+const SPAWN_POS: Vector2i = Vector2i(1, 6)
+
+# 일자 흐름. ACTIONS_PER_DAY 은 매 일자 시작 시 actions_remaining 리셋값.
+# DAY_MAX 는 서사 표시용 (자동 강제 종료 X).
+const ACTIONS_PER_DAY: int = 8
+const DAY_MAX: int = 10
+
+# --- 타일 조우 (Vector2i 키) ------------------------------------------------
+# 슬롯 스키마:
+#   on_enter / explore: {
+#       id:        String,        # 추적 키 (event 의 경우 = event_id)
+#       kind:      "event" | "combat" | "research",
+#       event_id:  String,         # kind == "event" 만
+#       enemy_id:  String,         # kind == "combat" 만
+#       once_per:  "internal_run" | "big_run" | (없음 = 매번)
+#   }
+# event 슬롯 — 진입/탐험 시 EventManager.begin_event(event_id) 직접 호출.
+# combat 슬롯 — phase = "battle_preview" 전환 + run_data["pending_combat"] 채움.
+# research 슬롯 — phase = "research" 전환 (기존 _enter_research 결).
+const TILE_ENCOUNTERS: Dictionary = {
+    Vector2i(3, 6): {
+        "on_enter": {
+            "id": "regression_speech",
+            "kind": "event",
+            "event_id": "regression_speech",
+            "once_per": "internal_run",
+        },
+    },
+    Vector2i(5, 6): {
+        "on_enter": {
+            "id": "repair_choice",
+            "kind": "event",
+            "event_id": "repair_choice",
+            "once_per": "internal_run",
+        },
+    },
+    Vector2i(7, 6): {
+        "on_enter": {
+            "id": "research_node",
+            "kind": "research",
+        },
+    },
+    Vector2i(4, 4): {
+        "on_enter": {
+            "id": "larva_combat_4_4",
+            "kind": "combat",
+            "enemy_id": "larva",
+            "once_per": "internal_run",
+        },
+    },
+    Vector2i(4, 8): {
+        "explore": {
+            "id": "found_letter",
+            "kind": "event",
+            "event_id": "found_letter",
+            "once_per": "internal_run",
+        },
+    },
 }
 
 
 # --- 이벤트 풀 (안 4 — kind 분리 + chain) -----------------------------------
-# 안 4 §3-1. EventManager._resolve_event_for_node 가 트리거 매치 + once_per
-# 필터 + 가중치 추첨으로 선정.
-# 1A 단계: dialogue kind 만 실 구현. 다른 kind 는 다음 차로.
+# 글로벌 트리거 (run_start / on_rest) — EventManager.resolve_event 가 트리거 매치 +
+# once_per 필터 + 가중치 추첨으로 선정. 라이브러리 결 (트리거 필드 없음) — 타일
+# 슬롯이 event_id 로 직접 호출 (resolve_event 미경유, 슬롯 자체의 once_per 적용).
 #   id           — 전역 유일 키 (seen_events 카운트 + chain id)
-#   kind         — "dialogue" (1A) | "effect" | "movie" | "choice" (다음 차로)
-#   trigger      — { type: "node_enter", node_type: <맵노드 type 값> }
-#   once_per     — "big_run" 또는 생략. 회귀 통과해 유지되는 카운트.
+#   kind         — "dialogue" | "effect" | "choice" | (movie 미구현)
+#   trigger      — 글로벌 트리거 이벤트만. {type: "run_start" | "on_rest"}.
+#   once_per     — "big_run" / "internal_run" / 생략 (= 매번)
 #   weight       — 동일 트리거 충돌 시 가중치.
 #   lines        — dialogue kind 전용. [{speaker, text}].
 
@@ -317,34 +383,28 @@ const EVENTS = {
         "id": "intro_speech",
         "kind": "dialogue",
         "trigger": {"type": "run_start"},
-        "once_per": "big_run",
         "weight": 10,
         "lines": [
             {"speaker": "히로인", "text": "시작합니다."},
             {"speaker": "히로인", "text": "환경을 확인합니다."},
         ],
     },
+    # 라이브러리 — 트리거 필드 없음. 타일 조우 슬롯이 event_id 로 직접 호출.
     "regression_speech": {
         "id": "regression_speech",
         "kind": "dialogue",
-        "trigger": {"type": "node_enter", "node_type": "event"},
-        "once_per": "big_run",
-        "weight": 10,
         "lines": [
             {"speaker": "히로인", "text": "회귀합니다."},
         ],
     },
 
-    # === Stage 2 (effect + chain + choice) — 수리 노드 chain ===
-    # node 6 (type "repair") 진입 → repair_choice (선택지) → 가지의 next →
+    # === Stage 2 (effect + chain + choice) — 수리 chain ===
+    # 타일 (5, 6) 진입 → repair_choice (선택지) → 가지의 next →
     # repair_arm/repair_body (effect) → repair_done_arm/body (dialogue) → chain 종료.
     # chain_root_id = "repair_choice" — seen_events 카운트는 root 만.
     "repair_choice": {
         "id": "repair_choice",
         "kind": "choice",
-        "trigger": {"type": "node_enter", "node_type": "repair"},
-        "once_per": "big_run",
-        "weight": 10,
         "prompt": {"speaker": "히로인", "text": "어디를 수리할까."},
         "choices": [
             {"label": "팔 수리", "next": "repair_arm"},
@@ -372,5 +432,27 @@ const EVENTS = {
         "id": "repair_done_body",
         "kind": "dialogue",
         "lines": [{"speaker": "히로인", "text": "몸 수리 완료."}],
+    },
+
+    # 탐험 슬롯용 라이브러리 — 타일 (4, 8) 의 explore 슬롯이 호출.
+    "found_letter": {
+        "id": "found_letter",
+        "kind": "dialogue",
+        "lines": [
+            {"speaker": "히로인", "text": "...편지. 알 수 없는 글자."},
+            {"speaker": "히로인", "text": "...누군가의 흔적입니다."},
+        ],
+    },
+
+    # 휴식 트리거. 매 휴식마다 발화 (반복 컷씬). once_per 없음 — 단일 라인이라도
+    # "휴식이 일어났다" 는 시각 신호로 매번 노출. 풀 다양화는 컨텐츠 차로.
+    "rest_dream_1": {
+        "id": "rest_dream_1",
+        "kind": "dialogue",
+        "trigger": {"type": "on_rest"},
+        "weight": 5,
+        "lines": [
+            {"speaker": "히로인", "text": "...밤이. 짧다."},
+        ],
     },
 }

@@ -24,11 +24,18 @@ var _arm_inspect_mode: String = ""  # "" | "equipped" | "spare"
 const HEROINE_FRONT_DIR := "res://에셋/타이틀/"   # battle_ui 와 동일 idle 8프레임
 var _heroine_sprite: AnimatedSprite2D
 
-# --- 맵 디스플레이 ---
-const MAP_ORIGIN: Vector2 = Vector2(180, 90)
-const MAP_SIZE: Vector2 = Vector2(880, 500)
+# --- 그리드 디스플레이 ---
+const TILE_PX: int = 38
+const GRID_ORIGIN: Vector2 = Vector2(220, 90)
 var _map_root: Control
-var _node_buttons: Dictionary = {}   # id: int → Button
+var _tile_rects: Dictionary = {}   # Vector2i → ColorRect
+var _player_marker: ColorRect
+
+# --- 그리드 HUD (일자 / 행동) ---
+var _day_label: Label
+var _actions_label: Label
+var _terrain_label: Label
+var _move_buttons: Dictionary = {}   # "U/D/L/R/E/REST" → Button
 
 # --- 전투 프리뷰 ---
 var _battle_preview_root: Control
@@ -60,7 +67,8 @@ func _ready():
     # 결과 (승리·패배 공용) — 타이틀로
     $result_screen/title_button.pressed.connect(GameManager.return_to_title)
 
-    _build_map_display()
+    _build_grid_display()
+    _build_grid_hud()
     _build_battle_preview()
     _build_recurrence_label()
     _build_balance_label()
@@ -93,6 +101,14 @@ func _on_state_changed():
             _save_feedback_label.visible = false
         if _to_title_button != null:
             _to_title_button.visible = false
+        if _day_label != null:
+            _day_label.visible = false
+        if _actions_label != null:
+            _actions_label.visible = false
+        if _terrain_label != null:
+            _terrain_label.visible = false
+        for btn in _move_buttons.values():
+            btn.visible = false
         return
 
     var phase = RunManager.run_data["phase"]
@@ -110,7 +126,8 @@ func _on_state_changed():
     show_phase(phase)
     update_labels()
     _refresh_arm_inspector()
-    _refresh_map_display()
+    _refresh_grid_display()
+    _refresh_grid_hud(phase)
     _refresh_battle_preview()
     _refresh_recurrence_label(phase)
     _refresh_balance_label(phase)
@@ -330,83 +347,174 @@ func _format_arm_text(arm: Dictionary) -> String:
 
 
 # ============================================================
-# 맵 디스플레이 — TEST_MAP_GRAPH 기반 노드 그래프 + 이동
+# 그리드 디스플레이 — WORLD_TERRAIN 기반 좌표 맵 + 이동/탐험/휴식
 # ============================================================
 
-func _build_map_display():
+func _build_grid_display() -> void:
     _map_root = Control.new()
-    _map_root.position = MAP_ORIGIN
-    _map_root.size = MAP_SIZE
+    _map_root.position = GRID_ORIGIN
     _map_root.visible = false
     add_child(_map_root)
 
-    # 엣지 (Line2D, 양방향 중 한 번만 그림)
-    var drawn_edges: Dictionary = {}
-    for id in GameData.TEST_MAP_GRAPH.keys():
-        var node: Dictionary = GameData.TEST_MAP_GRAPH[id]
-        for conn_id in node.connections:
-            var a: int = min(id, conn_id)
-            var b: int = max(id, conn_id)
-            var key: String = "%d-%d" % [a, b]
-            if drawn_edges.has(key):
-                continue
-            drawn_edges[key] = true
+    var rows: Array = GameData.WORLD_TERRAIN
+    for y in range(rows.size()):
+        var row: String = rows[y]
+        for x in range(row.length()):
+            var t: String = row[x]
+            var rect := ColorRect.new()
+            rect.position = Vector2(x * TILE_PX, y * TILE_PX)
+            rect.size = Vector2(TILE_PX - 2, TILE_PX - 2)
+            rect.color = _terrain_color(t)
+            _map_root.add_child(rect)
+            _tile_rects[Vector2i(x, y)] = rect
 
-            var line := Line2D.new()
-            line.points = PackedVector2Array([_node_position(id), _node_position(conn_id)])
-            line.width = 3.0
-            line.default_color = Color(0.5, 0.5, 0.55)
-            _map_root.add_child(line)
+    # 조우 마커 — TILE_ENCOUNTERS 의 키 위에 작은 점.
+    for pos in GameData.TILE_ENCOUNTERS.keys():
+        var enc: Dictionary = GameData.TILE_ENCOUNTERS[pos]
+        var marker := ColorRect.new()
+        marker.size = Vector2(8, 8)
+        marker.position = Vector2(pos.x * TILE_PX + (TILE_PX - 10) / 2,
+                                   pos.y * TILE_PX + (TILE_PX - 10) / 2)
+        marker.color = _encounter_color(enc)
+        _map_root.add_child(marker)
 
-    # 노드 버튼
-    for id in GameData.TEST_MAP_GRAPH.keys():
-        var btn := Button.new()
-        var pos: Vector2 = _node_position(id)
-        btn.custom_minimum_size = Vector2(80, 80)
-        btn.position = pos - Vector2(40, 40)
-        btn.text = "%d" % id
-        btn.add_theme_font_size_override("font_size", 22)
-        btn.pressed.connect(_on_map_node_pressed.bind(id))
-        _map_root.add_child(btn)
-        _node_buttons[id] = btn
+    # 플레이어 마커
+    _player_marker = ColorRect.new()
+    _player_marker.size = Vector2(TILE_PX - 10, TILE_PX - 10)
+    _player_marker.color = Color(1.0, 0.85, 0.3)
+    _map_root.add_child(_player_marker)
 
 
-func _node_position(id: int) -> Vector2:
-    var node: Dictionary = GameData.TEST_MAP_GRAPH[id]
-    var pos: Array = node.get("position", [0.5, 0.5])
-    return Vector2(pos[0] * MAP_SIZE.x, pos[1] * MAP_SIZE.y)
+func _terrain_color(t: String) -> Color:
+    match t:
+        "G": return Color(0.40, 0.62, 0.32)   # 풀밭
+        "P": return Color(0.78, 0.70, 0.50)   # 길
+        "F": return Color(0.20, 0.32, 0.18)   # 숲 (벽)
+        "C": return Color(0.45, 0.40, 0.38)   # 절벽
+        "W": return Color(0.30, 0.45, 0.65)   # 물
+        _:   return Color(0.5, 0.5, 0.5)
 
 
-func _on_map_node_pressed(id: int):
-    RunManager.move_to_node(id)
+func _encounter_color(enc: Dictionary) -> Color:
+    if enc.has("on_enter"):
+        var k: String = enc["on_enter"].get("kind", "")
+        match k:
+            "event":    return Color(0.85, 0.55, 0.95)   # 보라 — 이벤트
+            "combat":   return Color(0.95, 0.35, 0.35)   # 빨강 — 전투
+            "research": return Color(0.40, 0.85, 0.95)   # 시안 — 연구
+    if enc.has("explore"):
+        return Color(0.95, 0.85, 0.40)   # 노랑 — 탐험 슬롯
+    return Color(0.8, 0.8, 0.8)
 
 
-func _refresh_map_display():
+func _refresh_grid_display() -> void:
     if _map_root == null or not _map_root.visible:
         return
-    var current_id = RunManager.run_data.get("current_node_id")
-    var current_node: Dictionary = RunManager.get_current_node()
-    var adjacent_ids: Array = current_node.get("connections", [])
+    var pos: Vector2i = RunManager.run_data.get("player_pos", GameData.SPAWN_POS)
+    _player_marker.position = Vector2(pos.x * TILE_PX + 5, pos.y * TILE_PX + 5)
 
-    for id in _node_buttons.keys():
-        var btn: Button = _node_buttons[id]
-        var node: Dictionary = RunManager.get_node_by_id(id)
-        var is_current: bool = id == current_id
-        var is_visited: bool = node.get("visited", false)
-        var is_adjacent: bool = id in adjacent_ids
-
-        if is_current:
-            btn.modulate = Color(1.0, 0.85, 0.3)     # 노랑 — 현재 위치
-            btn.disabled = true
-        elif is_adjacent:
-            btn.modulate = Color(0.5, 1.0, 0.6)      # 초록 — 이동 가능
-            btn.disabled = false
-        elif is_visited:
-            btn.modulate = Color(0.55, 0.55, 0.55)   # 회색 — 방문함
-            btn.disabled = true
+    var visited: Dictionary = RunManager.run_data.get("visited_tiles", {})
+    for tile_pos in _tile_rects.keys():
+        var rect: ColorRect = _tile_rects[tile_pos]
+        var t: String = GameData.WORLD_TERRAIN[tile_pos.y][tile_pos.x]
+        var base: Color = _terrain_color(t)
+        if not GameData.TERRAIN_RULES.get(t, {}).get("passable", false):
+            rect.color = base   # 벽은 그대로
+        elif visited.get(tile_pos, false):
+            rect.color = base
         else:
-            btn.modulate = Color(0.85, 0.85, 0.85)   # 옅은 — 미방문/비인접
-            btn.disabled = true
+            rect.color = base * 0.55   # 미방문 — 어둡게
+
+
+# --- 그리드 HUD: 일자 / 행동 / 지형 + 이동·탐험·휴식 버튼 ---
+
+func _build_grid_hud() -> void:
+    _day_label = Label.new()
+    _day_label.position = Vector2(40, 30)
+    _day_label.size = Vector2(160, 28)
+    _day_label.add_theme_font_size_override("font_size", 18)
+    _day_label.visible = false
+    add_child(_day_label)
+
+    _actions_label = Label.new()
+    _actions_label.position = Vector2(40, 60)
+    _actions_label.size = Vector2(160, 28)
+    _actions_label.add_theme_font_size_override("font_size", 16)
+    _actions_label.visible = false
+    add_child(_actions_label)
+
+    _terrain_label = Label.new()
+    _terrain_label.position = Vector2(40, 90)
+    _terrain_label.size = Vector2(160, 28)
+    _terrain_label.add_theme_font_size_override("font_size", 14)
+    _terrain_label.visible = false
+    add_child(_terrain_label)
+
+    var btn_specs: Array = [
+        ["U",    "↑",       Vector2(120, 540), Vector2i(0, -1)],
+        ["L",    "←",       Vector2(72,  580), Vector2i(-1, 0)],
+        ["D",    "↓",       Vector2(120, 580), Vector2i(0, 1)],
+        ["R",    "→",       Vector2(168, 580), Vector2i(1, 0)],
+        ["E",    "탐험 (E)", Vector2(40,  640), Vector2i.ZERO],
+        ["REST", "휴식 (R)", Vector2(140, 640), Vector2i.ZERO],
+    ]
+    for spec in btn_specs:
+        var key: String = spec[0]
+        var btn := Button.new()
+        btn.text = spec[1]
+        btn.position = spec[2]
+        btn.custom_minimum_size = Vector2(46, 36) if key in ["U", "D", "L", "R"] else Vector2(96, 36)
+        btn.add_theme_font_size_override("font_size", 18 if key in ["U", "D", "L", "R"] else 14)
+        btn.visible = false
+        if key in ["U", "D", "L", "R"]:
+            btn.pressed.connect(_on_move_pressed.bind(spec[3]))
+        elif key == "E":
+            btn.pressed.connect(RunManager.try_explore)
+        elif key == "REST":
+            btn.pressed.connect(RunManager.rest)
+        add_child(btn)
+        _move_buttons[key] = btn
+
+
+func _on_move_pressed(dir: Vector2i) -> void:
+    RunManager.try_move(dir)
+
+
+func _refresh_grid_hud(phase: String) -> void:
+    var show: bool = (phase == "map")
+    if _day_label != null: _day_label.visible = show
+    if _actions_label != null: _actions_label.visible = show
+    if _terrain_label != null: _terrain_label.visible = show
+    for btn in _move_buttons.values():
+        btn.visible = show
+    if not show:
+        return
+    var d = RunManager.run_data
+    var day: int = d.get("day", 1)
+    var day_max: int = d.get("day_max", GameData.DAY_MAX)
+    var actions: int = d.get("actions_remaining", 0)
+    var actions_max: int = d.get("actions_per_day", GameData.ACTIONS_PER_DAY)
+    var pos: Vector2i = d.get("player_pos", GameData.SPAWN_POS)
+    _day_label.text = "Day %d / %d" % [day, day_max]
+    _actions_label.text = "행동 %d / %d" % [actions, actions_max]
+    _terrain_label.text = "현재: %s  (%d, %d)" % [
+        RunManager.get_terrain_name(pos), pos.x, pos.y]
+
+
+func _unhandled_input(event: InputEvent) -> void:
+    if not (event is InputEventKey) or not event.pressed:
+        return
+    if RunManager.run_data.is_empty():
+        return
+    if RunManager.run_data.get("phase") != "map":
+        return
+    match (event as InputEventKey).keycode:
+        KEY_W, KEY_UP:    RunManager.try_move(Vector2i(0, -1))
+        KEY_S, KEY_DOWN:  RunManager.try_move(Vector2i(0, 1))
+        KEY_A, KEY_LEFT:  RunManager.try_move(Vector2i(-1, 0))
+        KEY_D, KEY_RIGHT: RunManager.try_move(Vector2i(1, 0))
+        KEY_E:            RunManager.try_explore()
+        KEY_R:            RunManager.rest()
 
 
 # ============================================================
@@ -463,9 +571,9 @@ func _on_preview_start_pressed():
 func _refresh_battle_preview():
     if _battle_preview_root == null or not _battle_preview_root.visible:
         return
-    var current: Dictionary = RunManager.get_current_node()
-    var enemy_id = current.get("enemy_id")
-    if enemy_id == null or not GameData.ENEMIES.has(enemy_id):
+    var pending: Dictionary = RunManager.run_data.get("pending_combat", {})
+    var enemy_id: String = pending.get("enemy_id", "")
+    if enemy_id == "" or not GameData.ENEMIES.has(enemy_id):
         _preview_enemy_name_label.text = "(enemy 없음)"
         _preview_enemy_hp_label.text = ""
         _preview_intents_label.text = ""
