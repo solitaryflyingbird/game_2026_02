@@ -60,7 +60,7 @@ func _run_scenario() -> bool:
         and (se as Dictionary).get("regression_speech", 0) == 0) and all_ok
 
     all_ok = _check("초기 player_pos = SPAWN_POS",
-        RunManager.run_data.get("player_pos") == GameData.SPAWN_POS) and all_ok
+        RunManager.run_data.get("player_pos") == GameData.MAPS[GameData.STARTING_MAP]["spawn"]) and all_ok
 
     # === 2. 동 1칸 이동 — 빈 칸 (2,6), 이벤트 없음 ===
     var moved1: bool = RunManager.try_move(Vector2i(1, 0))
@@ -121,7 +121,7 @@ func _run_scenario() -> bool:
     all_ok = _check("회귀 후 event_id = 'intro_speech'",
         EventManager.event_state.get("event_id") == "intro_speech") and all_ok
     all_ok = _check("회귀 후 player_pos = SPAWN_POS",
-        RunManager.run_data.get("player_pos") == GameData.SPAWN_POS) and all_ok
+        RunManager.run_data.get("player_pos") == GameData.MAPS[GameData.STARTING_MAP]["spawn"]) and all_ok
     # intro 소비
     while not EventManager.event_state.is_empty():
         EventManager.advance_line()

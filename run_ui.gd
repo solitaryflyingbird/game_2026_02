@@ -24,12 +24,15 @@ var _arm_inspect_mode: String = ""  # "" | "equipped" | "spare"
 const HEROINE_FRONT_DIR := "res://에셋/타이틀/"   # battle_ui 와 동일 idle 8프레임
 var _heroine_sprite: AnimatedSprite2D
 
-# --- 그리드 디스플레이 ---
+# --- 그리드 디스플레이 (다중 맵) ---
 const TILE_PX: int = 38
 const GRID_ORIGIN: Vector2 = Vector2(220, 90)
-var _map_root: Control
-var _tile_rects: Dictionary = {}   # Vector2i → ColorRect
-var _player_marker: ColorRect
+var _grid_roots: Dictionary = {}     # map_id: String → Control (그리드 루트)
+var _tile_rects_by_map: Dictionary = {}   # map_id → { Vector2i → ColorRect }
+var _player_marker: ColorRect       # 플레이어 마커 (현 맵 root 의 자식으로 reparent)
+# 현 visible 맵 — 옛 _map_root 결로 한 번에 하나만 visible.
+var _map_root: Control               # 현재 보이는 그리드 루트 (= _grid_roots[current_map_id])
+var _tile_rects: Dictionary = {}     # 현 _map_root 의 tile_rects (= _tile_rects_by_map[current])
 
 # --- 그리드 HUD (일자 / 행동) ---
 var _day_label: Label
@@ -87,8 +90,8 @@ func _on_state_changed():
         _btn_show_spare.visible = false
         if _heroine_sprite != null:
             _heroine_sprite.visible = false
-        if _map_root != null:
-            _map_root.visible = false
+        for r in _grid_roots.values():
+            r.visible = false
         if _battle_preview_root != null:
             _battle_preview_root.visible = false
         if _recurrence_label != null:
@@ -143,8 +146,11 @@ func show_phase(phase: String):
         screen.visible = false
     if phase in screens:
         screens[phase].visible = true
-    if _map_root != null:
-        _map_root.visible = phase == "map"
+    # 그리드 가시성은 _refresh_grid_display 가 current_map_id 결로 처리.
+    # 여기서는 phase != "map" 이면 모든 그리드 root 숨김.
+    if phase != "map":
+        for r in _grid_roots.values():
+            r.visible = false
     if _battle_preview_root != null:
         _battle_preview_root.visible = phase == "battle_preview"
 
@@ -347,16 +353,35 @@ func _format_arm_text(arm: Dictionary) -> String:
 
 
 # ============================================================
-# 그리드 디스플레이 — WORLD_TERRAIN 기반 좌표 맵 + 이동/탐험/휴식
+# 그리드 디스플레이 — MAPS[current_map_id] 기반 좌표 맵 + 이동/탐험/휴식
 # ============================================================
 
 func _build_grid_display() -> void:
-    _map_root = Control.new()
-    _map_root.position = GRID_ORIGIN
-    _map_root.visible = false
-    add_child(_map_root)
+    # 모든 맵의 그리드를 미리 빌드. _grid_roots[map_id] 가 각 맵의 Control.
+    # 가시성은 _refresh_grid_display 가 current_map_id 결로 토글.
+    for map_id in GameData.MAPS.keys():
+        _build_one_grid(map_id)
 
-    var rows: Array = GameData.WORLD_TERRAIN
+    # 플레이어 마커 — 현 맵 root 결로 reparent. 일단 시작 맵 결.
+    _player_marker = ColorRect.new()
+    _player_marker.size = Vector2(TILE_PX - 10, TILE_PX - 10)
+    _player_marker.color = Color(1.0, 0.85, 0.3)
+    var start_root: Control = _grid_roots[GameData.STARTING_MAP]
+    start_root.add_child(_player_marker)
+    _map_root = start_root
+    _tile_rects = _tile_rects_by_map[GameData.STARTING_MAP]
+
+
+func _build_one_grid(map_id: String) -> void:
+    var root := Control.new()
+    root.position = GRID_ORIGIN
+    root.visible = false
+    add_child(root)
+    _grid_roots[map_id] = root
+
+    var map: Dictionary = GameData.MAPS[map_id]
+    var rows: Array = map["terrain"]
+    var tile_rects: Dictionary = {}
     for y in range(rows.size()):
         var row: String = rows[y]
         for x in range(row.length()):
@@ -365,24 +390,20 @@ func _build_grid_display() -> void:
             rect.position = Vector2(x * TILE_PX, y * TILE_PX)
             rect.size = Vector2(TILE_PX - 2, TILE_PX - 2)
             rect.color = _terrain_color(t)
-            _map_root.add_child(rect)
-            _tile_rects[Vector2i(x, y)] = rect
+            root.add_child(rect)
+            tile_rects[Vector2i(x, y)] = rect
+    _tile_rects_by_map[map_id] = tile_rects
 
-    # 조우 마커 — TILE_ENCOUNTERS 의 키 위에 작은 점.
-    for pos in GameData.TILE_ENCOUNTERS.keys():
-        var enc: Dictionary = GameData.TILE_ENCOUNTERS[pos]
+    # 조우 마커
+    var encounters: Dictionary = map["encounters"]
+    for pos in encounters.keys():
+        var enc: Dictionary = encounters[pos]
         var marker := ColorRect.new()
         marker.size = Vector2(8, 8)
         marker.position = Vector2(pos.x * TILE_PX + (TILE_PX - 10) / 2,
                                    pos.y * TILE_PX + (TILE_PX - 10) / 2)
         marker.color = _encounter_color(enc)
-        _map_root.add_child(marker)
-
-    # 플레이어 마커
-    _player_marker = ColorRect.new()
-    _player_marker.size = Vector2(TILE_PX - 10, TILE_PX - 10)
-    _player_marker.color = Color(1.0, 0.85, 0.3)
-    _map_root.add_child(_player_marker)
+        root.add_child(marker)
 
 
 func _terrain_color(t: String) -> Color:
@@ -399,24 +420,44 @@ func _encounter_color(enc: Dictionary) -> Color:
     if enc.has("on_enter"):
         var k: String = enc["on_enter"].get("kind", "")
         match k:
-            "event":    return Color(0.85, 0.55, 0.95)   # 보라 — 이벤트
-            "combat":   return Color(0.95, 0.35, 0.35)   # 빨강 — 전투
-            "research": return Color(0.40, 0.85, 0.95)   # 시안 — 연구
+            "event":      return Color(0.85, 0.55, 0.95)   # 보라 — 이벤트
+            "combat":     return Color(0.95, 0.35, 0.35)   # 빨강 — 전투
+            "research":   return Color(0.40, 0.85, 0.95)   # 시안 — 연구
+            "transition": return Color(1.0, 1.0, 1.0)       # 흰색 — 전이
     if enc.has("explore"):
         return Color(0.95, 0.85, 0.40)   # 노랑 — 탐험 슬롯
     return Color(0.8, 0.8, 0.8)
 
 
 func _refresh_grid_display() -> void:
-    if _map_root == null or not _map_root.visible:
+    var map_id: String = RunManager.run_data.get("current_map_id", GameData.STARTING_MAP)
+
+    # 현 맵 root 가시 + 다른 맵 root 숨김 + 플레이어 마커 reparent
+    var phase_is_map: bool = (RunManager.run_data.get("phase") == "map")
+    for mid in _grid_roots.keys():
+        var root: Control = _grid_roots[mid]
+        var should_show: bool = (mid == map_id) and phase_is_map
+        root.visible = should_show
+    if _map_root != _grid_roots.get(map_id):
+        _map_root = _grid_roots[map_id]
+        _tile_rects = _tile_rects_by_map[map_id]
+        if _player_marker.get_parent() != _map_root:
+            _player_marker.get_parent().remove_child(_player_marker)
+            _map_root.add_child(_player_marker)
+
+    if not _map_root.visible:
         return
-    var pos: Vector2i = RunManager.run_data.get("player_pos", GameData.SPAWN_POS)
+
+    var map: Dictionary = GameData.MAPS[map_id]
+    var spawn: Vector2i = map["spawn"]
+    var pos: Vector2i = RunManager.run_data.get("player_pos", spawn)
     _player_marker.position = Vector2(pos.x * TILE_PX + 5, pos.y * TILE_PX + 5)
 
-    var visited: Dictionary = RunManager.run_data.get("visited_tiles", {})
+    var visited: Dictionary = RunManager.run_data.get("visited_by_map", {}).get(map_id, {})
+    var rows: Array = map["terrain"]
     for tile_pos in _tile_rects.keys():
         var rect: ColorRect = _tile_rects[tile_pos]
-        var t: String = GameData.WORLD_TERRAIN[tile_pos.y][tile_pos.x]
+        var t: String = rows[tile_pos.y][tile_pos.x]
         var base: Color = _terrain_color(t)
         if not GameData.TERRAIN_RULES.get(t, {}).get("passable", false):
             rect.color = base   # 벽은 그대로
@@ -494,10 +535,13 @@ func _refresh_grid_hud(phase: String) -> void:
     var day_max: int = d.get("day_max", GameData.DAY_MAX)
     var actions: int = d.get("actions_remaining", 0)
     var actions_max: int = d.get("actions_per_day", GameData.ACTIONS_PER_DAY)
-    var pos: Vector2i = d.get("player_pos", GameData.SPAWN_POS)
+    var map_id: String = d.get("current_map_id", GameData.STARTING_MAP)
+    var spawn: Vector2i = GameData.MAPS[map_id]["spawn"]
+    var pos: Vector2i = d.get("player_pos", spawn)
     _day_label.text = "Day %d / %d" % [day, day_max]
     _actions_label.text = "행동 %d / %d" % [actions, actions_max]
-    _terrain_label.text = "현재: %s  (%d, %d)" % [
+    _terrain_label.text = "%s — %s  (%d, %d)" % [
+        RunManager.get_current_map_name(),
         RunManager.get_terrain_name(pos), pos.x, pos.y]
 
 

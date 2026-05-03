@@ -141,7 +141,7 @@ func _run_scenario() -> bool:
     ok = _check("회귀 후 event_id = 'intro_speech'",
         EventManager.event_state.get("event_id") == "intro_speech") and ok
     ok = _check("회귀 후 player_pos = SPAWN_POS",
-        RunManager.run_data.get("player_pos") == GameData.SPAWN_POS) and ok
+        RunManager.run_data.get("player_pos") == GameData.MAPS[GameData.STARTING_MAP]["spawn"]) and ok
 
     # intro 소비
     EventManager.advance_line()

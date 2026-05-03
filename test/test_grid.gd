@@ -52,20 +52,21 @@ func _run_scenario() -> bool:
     # ============================================================
     # GR-1: 자료구조 정합
     # ============================================================
-    ok = _check("WORLD_TERRAIN 12 행",
-        GameData.WORLD_TERRAIN.size() == 12) and ok
-    ok = _check("WORLD_TERRAIN[0] 16 열",
-        GameData.WORLD_TERRAIN[0].length() == 16) and ok
+    var start_map: Dictionary = GameData.MAPS[GameData.STARTING_MAP]
+    ok = _check("MAPS terrain 12 행",
+        start_map["terrain"].size() == 12) and ok
+    ok = _check("MAPS terrain[0] 16 열",
+        start_map["terrain"][0].length() == 16) and ok
     ok = _check("TERRAIN_RULES — G passable",
         GameData.TERRAIN_RULES["G"]["passable"] == true) and ok
     ok = _check("TERRAIN_RULES — F not passable",
         GameData.TERRAIN_RULES["F"]["passable"] == false) and ok
-    ok = _check("SPAWN_POS = (1, 6)",
-        GameData.SPAWN_POS == Vector2i(1, 6)) and ok
+    ok = _check("MAPS spawn = (1, 6)",
+        start_map["spawn"] == Vector2i(1, 6)) and ok
     ok = _check("ACTIONS_PER_DAY = 8",
         GameData.ACTIONS_PER_DAY == 8) and ok
-    ok = _check("TILE_ENCOUNTERS 키 Vector2i",
-        GameData.TILE_ENCOUNTERS.has(Vector2i(3, 6))) and ok
+    ok = _check("MAPS encounters 키 Vector2i",
+        start_map["encounters"].has(Vector2i(3, 6))) and ok
 
     # ============================================================
     # GR-1: run_data 초기 필드
@@ -75,15 +76,18 @@ func _run_scenario() -> bool:
     await _consume_dialogues()  # intro 소비
 
     var rd: Dictionary = RunManager.run_data
-    ok = _check("player_pos = SPAWN_POS",
-        rd.get("player_pos") == GameData.SPAWN_POS) and ok
+    var spawn: Vector2i = GameData.MAPS[GameData.STARTING_MAP]["spawn"]
+    ok = _check("player_pos = SPAWN",
+        rd.get("player_pos") == spawn) and ok
+    ok = _check("current_map_id = STARTING_MAP",
+        rd.get("current_map_id") == GameData.STARTING_MAP) and ok
     ok = _check("day = 1", rd.get("day") == 1) and ok
     ok = _check("actions_remaining = ACTIONS_PER_DAY",
         rd.get("actions_remaining") == GameData.ACTIONS_PER_DAY) and ok
-    ok = _check("visited_tiles[SPAWN] = true",
-        rd.get("visited_tiles", {}).get(GameData.SPAWN_POS, false)) and ok
-    ok = _check("explored_tiles 비어있음",
-        rd.get("explored_tiles", {}).is_empty()) and ok
+    ok = _check("visited_by_map[STARTING][SPAWN] = true",
+        rd.get("visited_by_map", {}).get(GameData.STARTING_MAP, {}).get(spawn, false)) and ok
+    ok = _check("explored_by_map[STARTING] 비어있음",
+        rd.get("explored_by_map", {}).get(GameData.STARTING_MAP, {}).is_empty()) and ok
     ok = _check("seen_this_run 비어있음",
         rd.get("seen_this_run", {}).is_empty()) and ok
 
@@ -94,7 +98,7 @@ func _run_scenario() -> bool:
     ok = _check("벽 (0,6) 방향 이동 거부",
         not blocked) and ok
     ok = _check("거부 후 위치 유지",
-        RunManager.run_data["player_pos"] == GameData.SPAWN_POS) and ok
+        RunManager.run_data["player_pos"] == spawn) and ok
     ok = _check("거부 후 actions 무변",
         RunManager.run_data["actions_remaining"] == GameData.ACTIONS_PER_DAY) and ok
 
@@ -104,15 +108,15 @@ func _run_scenario() -> bool:
         RunManager.run_data["player_pos"] == Vector2i(2, 6)) and ok
     ok = _check("actions_remaining 차감",
         RunManager.run_data["actions_remaining"] == GameData.ACTIONS_PER_DAY - 1) and ok
-    ok = _check("visited_tiles[(2,6)] = true",
-        RunManager.run_data["visited_tiles"].get(Vector2i(2, 6), false)) and ok
+    ok = _check("visited_by_map[STARTING][(2,6)] = true",
+        RunManager.run_data["visited_by_map"][GameData.STARTING_MAP].get(Vector2i(2, 6), false)) and ok
 
     # ============================================================
     # GR-3: 탐험 — (4,8) 의 explore 슬롯 발화
     # ============================================================
     # 회차 1 의 actions 를 보존하기 위해 직접 위치 세팅.
     RunManager.run_data["player_pos"] = Vector2i(4, 8)
-    RunManager.run_data["visited_tiles"][Vector2i(4, 8)] = true
+    RunManager.run_data["visited_by_map"][GameData.STARTING_MAP][Vector2i(4, 8)] = true
     var explored: bool = RunManager.try_explore()
     ok = _check("(4,8) 탐험 시도 — true 반환", explored) and ok
     ok = _check("(4,8) 탐험 후 phase = 'event' (found_letter)",
@@ -204,14 +208,14 @@ func _run_scenario() -> bool:
 
     ok = _check("leave_research → big_run_count +1",
         RunManager.big_run_data["meta"]["big_run_count"] == big_run_count_before + 1) and ok
-    ok = _check("회귀 후 player_pos = SPAWN_POS",
-        RunManager.run_data.get("player_pos") == GameData.SPAWN_POS) and ok
+    ok = _check("회귀 후 player_pos = SPAWN",
+        RunManager.run_data.get("player_pos") == GameData.MAPS[GameData.STARTING_MAP]["spawn"]) and ok
     ok = _check("회귀 후 day = 1 (리셋)",
         RunManager.run_data.get("day") == 1) and ok
     ok = _check("회귀 후 seen_this_run 비움",
         RunManager.run_data.get("seen_this_run", {}).is_empty()) and ok
-    ok = _check("회귀 후 explored_tiles 비움",
-        RunManager.run_data.get("explored_tiles", {}).is_empty()) and ok
+    ok = _check("회귀 후 explored_by_map[STARTING] 비움",
+        RunManager.run_data.get("explored_by_map", {}).get(GameData.STARTING_MAP, {}).is_empty()) and ok
 
     # 회귀 후 (3,6) 재진입 — regression 재발화 (슬롯 once_per: internal_run)
     RunManager.try_move(Vector2i(1, 0))   # (2,6)

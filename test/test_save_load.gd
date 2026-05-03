@@ -116,7 +116,7 @@ func _run_scenario() -> bool:
     var body_hp_before: int = RunManager.run_data.get("body_hp", 0)
     var seen_intro_before: int = RunManager.big_run_data["seen_events"].get("intro_speech", 0)
     var seen_regression_before: int = RunManager.big_run_data["seen_events"].get("regression_speech", 0)
-    var visited_before: Dictionary = RunManager.run_data.get("visited_tiles", {}).duplicate(true)
+    var visited_before: Dictionary = RunManager.run_data.get("visited_by_map", {}).get(GameData.STARTING_MAP, {}).duplicate(true)
 
     await get_tree().process_frame
     await get_tree().process_frame
@@ -196,8 +196,8 @@ func _run_scenario() -> bool:
         RunManager.big_run_data["seen_events"].get("regression_speech", 0) == seen_regression_before) and ok
     ok = _check("load 후 phase = 'map'",
         RunManager.run_data.get("phase") == "map") and ok
-    ok = _check("load 후 visited_tiles 크기 일치",
-        RunManager.run_data.get("visited_tiles", {}).size() == visited_before.size()) and ok
+    ok = _check("load 후 visited_by_map[STARTING] 크기 일치",
+        RunManager.run_data.get("visited_by_map", {}).get(GameData.STARTING_MAP, {}).size() == visited_before.size()) and ok
 
     # ============================================================
     # 섹션 6.5: load 후 인터랙션 — try_move 가 실제 작동

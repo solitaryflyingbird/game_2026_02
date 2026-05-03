@@ -84,10 +84,27 @@ func load_save() -> bool:
         return false
     RunManager.big_run_data = (data.get("big_run_data", {}) as Dictionary).duplicate(true)
     RunManager.run_data = (data.get("run_data", {}) as Dictionary).duplicate(true)
+    _migrate_save(RunManager.run_data, RunManager.big_run_data)
     RunManager.state_changed.emit()
     app_phase = "in_run"
     app_state_changed.emit()
     return true
+
+
+# 옛 결 세이브 → 신 결 결로 자동 변환.
+# 1 맵 결 (`visited_tiles` / `explored_tiles` / `current_map_id` 누락) → 다중 맵 결.
+# in-place 수정 — RunManager.run_data 직접 변경.
+func _migrate_save(rd: Dictionary, _brd: Dictionary) -> void:
+    if not rd.has("current_map_id"):
+        rd["current_map_id"] = GameData.STARTING_MAP
+    if not rd.has("visited_by_map"):
+        var legacy_visited: Dictionary = rd.get("visited_tiles", {})
+        rd["visited_by_map"] = { GameData.STARTING_MAP: legacy_visited.duplicate() }
+        rd.erase("visited_tiles")
+    if not rd.has("explored_by_map"):
+        var legacy_explored: Dictionary = rd.get("explored_tiles", {})
+        rd["explored_by_map"] = { GameData.STARTING_MAP: legacy_explored.duplicate() }
+        rd.erase("explored_tiles")
 
 
 func has_save() -> bool:

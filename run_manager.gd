@@ -57,13 +57,16 @@ func _new_big_run() -> void:
 func _start_internal_run() -> void:
     run_data = big_run_data.duplicate(true)
     # 그리드 회차 상태는 내부 런 고유. 복제 후 덮어쓴다.
-    run_data["player_pos"] = GameData.SPAWN_POS
+    var start_map: String = GameData.STARTING_MAP
+    var spawn: Vector2i = GameData.MAPS[start_map]["spawn"]
+    run_data["current_map_id"] = start_map
+    run_data["player_pos"] = spawn
     run_data["day"] = 1
     run_data["day_max"] = GameData.DAY_MAX
     run_data["actions_per_day"] = GameData.ACTIONS_PER_DAY
     run_data["actions_remaining"] = GameData.ACTIONS_PER_DAY
-    run_data["visited_tiles"] = { GameData.SPAWN_POS: true }
-    run_data["explored_tiles"] = {}
+    run_data["visited_by_map"] = { start_map: { spawn: true } }
+    run_data["explored_by_map"] = { start_map: {} }
     run_data["seen_this_run"] = {}
     run_data["pending_combat"] = {}
     run_data["phase"] = "map"
@@ -263,8 +266,13 @@ func _apply_arm_result(side: String, arm_result) -> void:
 # 그리드 — 지형 / 통과
 # ============================================================
 
+func _current_map() -> Dictionary:
+    var map_id: String = run_data.get("current_map_id", GameData.STARTING_MAP)
+    return GameData.MAPS.get(map_id, {})
+
+
 func _get_terrain_at(pos: Vector2i) -> String:
-    var rows: Array = GameData.WORLD_TERRAIN
+    var rows: Array = _current_map().get("terrain", [])
     if pos.y < 0 or pos.y >= rows.size():
         return ""
     var row: String = rows[pos.y]
@@ -287,7 +295,11 @@ func get_terrain_name(pos: Vector2i) -> String:
 
 
 func get_tile_encounter(pos: Vector2i) -> Dictionary:
-    return GameData.TILE_ENCOUNTERS.get(pos, {})
+    return _current_map().get("encounters", {}).get(pos, {})
+
+
+func get_current_map_name() -> String:
+    return _current_map().get("name", "")
 
 
 # 슬롯 once_per 필터. 통과(발화 가능) → true.
@@ -333,8 +345,30 @@ func _check_on_enter(pos: Vector2i) -> void:
         "research":
             run_data["seen_this_run"][slot.get("id", "")] = true
             _enter_research()
+        "transition":
+            _do_transition(slot)
         _:
             push_warning("_check_on_enter: 미지원 kind '%s'" % kind)
+
+
+# 맵 간 전이. 슬롯의 target_map / target_pos 결로 current_map_id + player_pos 갱신.
+# 도착지 visited_by_map / explored_by_map 자동 신설.
+# 주의: 도착지 슬롯 자동 평가 X — 양 끝의 transition 슬롯끼리 무한 루프 회피.
+# 도착지에 event/combat 슬롯이 있어도 발화 X (사용자가 다시 칸 떠나고 돌아와야 발화).
+func _do_transition(slot: Dictionary) -> void:
+    var target_map: String = slot.get("target_map", "")
+    var target_pos: Vector2i = slot.get("target_pos", Vector2i.ZERO)
+    if not GameData.MAPS.has(target_map):
+        push_warning("_do_transition: 알 수 없는 target_map '%s'" % target_map)
+        return
+    run_data["seen_this_run"][slot.get("id", "")] = true
+    run_data["current_map_id"] = target_map
+    run_data["player_pos"] = target_pos
+    if not run_data["visited_by_map"].has(target_map):
+        run_data["visited_by_map"][target_map] = {}
+    if not run_data["explored_by_map"].has(target_map):
+        run_data["explored_by_map"][target_map] = {}
+    run_data["visited_by_map"][target_map][target_pos] = true
 
 
 # 탐험 슬롯 디스패처. explore 슬롯 평가 + 필터 통과 시 kind 별 분기.
@@ -374,7 +408,10 @@ func try_move(dir: Vector2i) -> bool:
 
     run_data["player_pos"] = target
     run_data["actions_remaining"] -= 1
-    run_data["visited_tiles"][target] = true
+    var map_id: String = run_data.get("current_map_id", GameData.STARTING_MAP)
+    if not run_data.get("visited_by_map", {}).has(map_id):
+        run_data["visited_by_map"][map_id] = {}
+    run_data["visited_by_map"][map_id][target] = true
 
     _check_on_enter(target)
 
@@ -393,10 +430,13 @@ func try_explore() -> bool:
     if run_data.get("actions_remaining", 0) < 1:
         return false
     var pos: Vector2i = run_data["player_pos"]
-    if run_data["explored_tiles"].get(pos, false):
+    var map_id: String = run_data.get("current_map_id", GameData.STARTING_MAP)
+    if not run_data.get("explored_by_map", {}).has(map_id):
+        run_data["explored_by_map"][map_id] = {}
+    if run_data["explored_by_map"][map_id].get(pos, false):
         return false
 
-    run_data["explored_tiles"][pos] = true
+    run_data["explored_by_map"][map_id][pos] = true
     run_data["actions_remaining"] -= 1
     _check_on_explore(pos)
 

@@ -274,28 +274,22 @@ const ENEMIES = {
 }
 
 
-# --- 그리드 월드 (좌표 기반 맵) ---------------------------------------------
-# 16 × 12 그리드. 각 칸은 지형 코드 (G/P/F/C/W) 1자.
-# 외곽 한 줄은 벽 (F = 숲) — 통과 불가.
+# --- 그리드 월드 (다중 맵 dict) ---------------------------------------------
+# 각 맵 = { name, terrain (String[]), spawn (Vector2i), encounters (Dict[Vector2i, slot]) }
+# STARTING_MAP = 회차 시작 시 진입 맵 키.
+# TERRAIN_RULES 는 전역 — 지형 코드 (G/P/F/C/W) 의 의미는 맵 무관.
+# ACTIONS_PER_DAY / DAY_MAX 도 전역 (시간 자원).
 #
-# 지형 규칙: TERRAIN_RULES — passable 여부.
-# 칸 위 조우: TILE_ENCOUNTERS — Vector2i 키. on_enter / explore 슬롯.
-# 스폰: SPAWN_POS. 행동/일자: ACTIONS_PER_DAY / DAY_MAX.
-
-const WORLD_TERRAIN: Array = [
-    "FFFFFFFFFFFFFFFF",
-    "FGGGGGGGGGGGGGGF",
-    "FGGGGGGGGGGGGGGF",
-    "FGGGGGGGGGGGGGGF",
-    "FGGGGGGGGGGGGGGF",
-    "FGGGGGGGGGGGGGGF",
-    "FGGGGGGGGGGGGGGF",
-    "FGGGGGGGGGGGGGGF",
-    "FGGGGGGGGGGGGGGF",
-    "FGGGGGGGGGGGGGGF",
-    "FGGGGGGGGGGGGGGF",
-    "FFFFFFFFFFFFFFFF",
-]
+# 슬롯 스키마 (encounters 의 값):
+#   on_enter / explore: {
+#       id:        String,        # 추적 키 (event 의 경우 = event_id, 글로벌 unique)
+#       kind:      "event" | "combat" | "research" | "transition",
+#       event_id:  String,         # kind == "event" 만
+#       enemy_id:  String,         # kind == "combat" 만
+#       target_map: String,        # kind == "transition" 만 — 도착 맵 키
+#       target_pos: Vector2i,      # kind == "transition" 만 — 도착 좌표
+#       once_per:  "internal_run" | "big_run" | (없음 = 매번)
+#   }
 
 const TERRAIN_RULES: Dictionary = {
     "G": { "name": "풀밭", "passable": true },
@@ -305,63 +299,124 @@ const TERRAIN_RULES: Dictionary = {
     "W": { "name": "물",   "passable": false },
 }
 
-# 스폰 위치 — 거점.
-const SPAWN_POS: Vector2i = Vector2i(1, 6)
-
-# 일자 흐름. ACTIONS_PER_DAY 은 매 일자 시작 시 actions_remaining 리셋값.
-# DAY_MAX 는 서사 표시용 (자동 강제 종료 X).
 const ACTIONS_PER_DAY: int = 8
 const DAY_MAX: int = 10
 
-# --- 타일 조우 (Vector2i 키) ------------------------------------------------
-# 슬롯 스키마:
-#   on_enter / explore: {
-#       id:        String,        # 추적 키 (event 의 경우 = event_id)
-#       kind:      "event" | "combat" | "research",
-#       event_id:  String,         # kind == "event" 만
-#       enemy_id:  String,         # kind == "combat" 만
-#       once_per:  "internal_run" | "big_run" | (없음 = 매번)
-#   }
-# event 슬롯 — 진입/탐험 시 EventManager.begin_event(event_id) 직접 호출.
-# combat 슬롯 — phase = "battle_preview" 전환 + run_data["pending_combat"] 채움.
-# research 슬롯 — phase = "research" 전환 (기존 _enter_research 결).
-const TILE_ENCOUNTERS: Dictionary = {
-    Vector2i(3, 6): {
-        "on_enter": {
-            "id": "regression_speech",
-            "kind": "event",
-            "event_id": "regression_speech",
-            "once_per": "internal_run",
+const STARTING_MAP: String = "field_01"
+
+const MAPS: Dictionary = {
+    "field_01": {
+        "name": "평원",
+        "terrain": [
+            "FFFFFFFFFFFFFFFF",
+            "FGGGGGGGGGGGGGGF",
+            "FGGGGGGGGGGGGGGF",
+            "FGGGGGGGGGGGGGGF",
+            "FGGGGGGGGGGGGGGF",
+            "FGGGGGGGGGGGGGGF",
+            "FGGGGGGGGGGGGGGF",
+            "FGGGGGGGGGGGGGGF",
+            "FGGGGGGGGGGGGGGF",
+            "FGGGGGGGGGGGGGGF",
+            "FGGGGGGGGGGGGGGF",
+            "FFFFFFFFFFFFFFFF",
+        ],
+        "spawn": Vector2i(1, 6),
+        "encounters": {
+            Vector2i(3, 6): {
+                "on_enter": {
+                    "id": "regression_speech",
+                    "kind": "event",
+                    "event_id": "regression_speech",
+                    "once_per": "internal_run",
+                },
+            },
+            Vector2i(5, 6): {
+                "on_enter": {
+                    "id": "repair_choice",
+                    "kind": "event",
+                    "event_id": "repair_choice",
+                    "once_per": "internal_run",
+                },
+            },
+            Vector2i(7, 6): {
+                "on_enter": {
+                    "id": "research_node",
+                    "kind": "research",
+                },
+            },
+            Vector2i(4, 4): {
+                "on_enter": {
+                    "id": "larva_combat_4_4",
+                    "kind": "combat",
+                    "enemy_id": "larva",
+                    "once_per": "internal_run",
+                },
+            },
+            Vector2i(4, 8): {
+                "explore": {
+                    "id": "found_letter",
+                    "kind": "event",
+                    "event_id": "found_letter",
+                    "once_per": "internal_run",
+                },
+            },
+            Vector2i(14, 6): {
+                "on_enter": {
+                    "id": "field_to_ruin",
+                    "kind": "transition",
+                    "target_map": "ruin_01",
+                    "target_pos": Vector2i(0, 5),
+                },
+            },
         },
     },
-    Vector2i(5, 6): {
-        "on_enter": {
-            "id": "repair_choice",
-            "kind": "event",
-            "event_id": "repair_choice",
-            "once_per": "internal_run",
-        },
-    },
-    Vector2i(7, 6): {
-        "on_enter": {
-            "id": "research_node",
-            "kind": "research",
-        },
-    },
-    Vector2i(4, 4): {
-        "on_enter": {
-            "id": "larva_combat_4_4",
-            "kind": "combat",
-            "enemy_id": "larva",
-            "once_per": "internal_run",
-        },
-    },
-    Vector2i(4, 8): {
-        "explore": {
-            "id": "found_letter",
-            "kind": "event",
-            "event_id": "found_letter",
-            "once_per": "internal_run",
+    "ruin_01": {
+        "name": "폐허",
+        "terrain": [
+            "FFFFFFFFFF",
+            "FGGGGGGGGF",
+            "FGGGFFGGGF",
+            "FGGGGGGGGF",
+            "FGGGGGGGGF",
+            "PGGGGGGGGF",
+            "FGGGGFFGGF",
+            "FFFFFFFFFF",
+        ],
+        "spawn": Vector2i(0, 5),
+        "encounters": {
+            Vector2i(0, 5): {
+                "on_enter": {
+                    "id": "ruin_to_field",
+                    "kind": "transition",
+                    "target_map": "field_01",
+                    "target_pos": Vector2i(14, 6),
+                },
+            },
+            Vector2i(4, 4): {
+                "on_enter": {
+                    "id": "ruin_dust",
+                    "kind": "event",
+                    "event_id": "ruin_dust",
+                    "once_per": "internal_run",
+                },
+            },
+            Vector2i(7, 3): {
+                "on_enter": {
+                    "id": "ruin_combat_big_worm",
+                    "kind": "combat",
+                    "enemy_id": "big_worm",
+                    "once_per": "internal_run",
+                },
+            },
+            Vector2i(2, 6): {
+                "explore": {
+                    "id": "ruin_buried_chest",
+                    "kind": "event",
+                    "event_id": "ruin_buried_chest",
+                    "once_per": "big_run",
+                },
+            },
         },
     },
 }
@@ -441,6 +496,23 @@ const EVENTS = {
         "lines": [
             {"speaker": "히로인", "text": "...편지. 알 수 없는 글자."},
             {"speaker": "히로인", "text": "...누군가의 흔적입니다."},
+        ],
+    },
+
+    # ruin_01 라이브러리
+    "ruin_dust": {
+        "id": "ruin_dust",
+        "kind": "dialogue",
+        "lines": [
+            {"speaker": "히로인", "text": "...먼지가 쌓여있습니다."},
+        ],
+    },
+    "ruin_buried_chest": {
+        "id": "ruin_buried_chest",
+        "kind": "dialogue",
+        "lines": [
+            {"speaker": "히로인", "text": "...무언가 묻혀있습니다."},
+            {"speaker": "히로인", "text": "...오래된 부품 같은 것."},
         ],
     },
 
