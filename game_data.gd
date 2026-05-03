@@ -422,6 +422,68 @@ const MAPS: Dictionary = {
 }
 
 
+# --- 인벤토리 카탈로그 ------------------------------------------------------
+# ITEMS = 정의된 아이템 카탈로그. 인벤토리 dict 의 가능한 결 (= 추가 가능 결).
+# 인벤토리 자체는 RunManager 의 inventory dict — 보유 중인 결만 박힘 (count > 0).
+# 새 아이템 추가 = 본 const 에 한 결 박으면 끝, 인벤토리 / UI / 세이브 결 변경 X.
+#
+# 본 결의 5 종은 시스템 검증의 PLACEHOLDER. 컨텐츠 차에서 자유 확장.
+#
+# 필드:
+#   name           — 표시 결 (한국어).
+#   category       — UI 분기 결. 새 카테고리 추가 시 CATEGORY_NAMES 같이.
+#   scope          — 회귀 결:
+#                     "big_run_default": 빅 런 통과 (RESEARCH 만 변경),
+#                                          매 회차 시작 시 run["inventory"] 가 big 사본.
+#                     "internal_run":     회차 한정 (회귀 시 run["tools"] 빔).
+#   stack_max      — 보유 한도. RPG 결의 자유로 99 결 통일 (미래 차로 종합 한도).
+#   use_event_id   — 사용 시 발화 이벤트 id. null = 명시 사용 X (자원 결 / 자동 소모).
+
+const CATEGORY_NAMES: Dictionary = {
+    "consumable": "소비",
+    "material":   "재료",
+    "quest":      "퀘스트",
+}
+
+const ITEMS: Dictionary = {
+    "food": {
+        "name": "식량",
+        "category": "consumable",
+        "scope": "big_run_default",
+        "stack_max": 99,
+        "use_event_id": null,
+    },
+    "repair_kit": {
+        "name": "응급수리키트",
+        "category": "consumable",
+        "scope": "big_run_default",
+        "stack_max": 99,
+        "use_event_id": "use_repair_kit",
+    },
+    "rare_part": {
+        "name": "희귀 부품",
+        "category": "material",
+        "scope": "big_run_default",
+        "stack_max": 99,
+        "use_event_id": null,
+    },
+    "scanner": {
+        "name": "스캐너",
+        "category": "consumable",
+        "scope": "big_run_default",
+        "stack_max": 99,
+        "use_event_id": "use_scanner",
+    },
+    "key": {
+        "name": "도구",
+        "category": "quest",
+        "scope": "internal_run",
+        "stack_max": 99,
+        "use_event_id": null,
+    },
+}
+
+
 # --- 이벤트 풀 (안 4 — kind 분리 + chain) -----------------------------------
 # 글로벌 트리거 (run_start / on_rest) — EventManager.resolve_event 가 트리거 매치 +
 # once_per 필터 + 가중치 추첨으로 선정. 라이브러리 결 (트리거 필드 없음) — 타일
@@ -445,11 +507,21 @@ const EVENTS = {
         ],
     },
     # 라이브러리 — 트리거 필드 없음. 타일 조우 슬롯이 event_id 로 직접 호출.
+    # I-3 검증 결로 옛 "회귀합니다" 대사 결을 아이템 획득 chain 결로 변경.
+    # 흐름: dialogue (발견 대사) → next: regression_grant (effect: give_item).
     "regression_speech": {
         "id": "regression_speech",
         "kind": "dialogue",
         "lines": [
-            {"speaker": "히로인", "text": "회귀합니다."},
+            {"speaker": "히로인", "text": "응급수리키트를 발견했다."},
+        ],
+        "next": "regression_grant",
+    },
+    "regression_grant": {
+        "id": "regression_grant",
+        "kind": "effect",
+        "effects": [
+            { "type": "give_item", "params": { "item": "repair_kit", "amount": 1 } },
         ],
     },
 
@@ -513,6 +585,20 @@ const EVENTS = {
         "lines": [
             {"speaker": "히로인", "text": "...무언가 묻혀있습니다."},
             {"speaker": "히로인", "text": "...오래된 부품 같은 것."},
+        ],
+    },
+
+    # 인벤토리 — 사용 시 발화 결 (use_event_id 매핑).
+    "use_repair_kit": {
+        "id": "use_repair_kit",
+        "kind": "effect",
+        "effects": [{ "type": "heal_body", "params": { "amount": 25 } }],
+    },
+    "use_scanner": {
+        "id": "use_scanner",
+        "kind": "dialogue",
+        "lines": [
+            {"speaker": "히로인", "text": "...주변을 스캔합니다."},
         ],
     },
 

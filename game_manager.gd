@@ -94,7 +94,7 @@ func load_save() -> bool:
 # 옛 결 세이브 → 신 결 결로 자동 변환.
 # 1 맵 결 (`visited_tiles` / `explored_tiles` / `current_map_id` 누락) → 다중 맵 결.
 # in-place 수정 — RunManager.run_data 직접 변경.
-func _migrate_save(rd: Dictionary, _brd: Dictionary) -> void:
+func _migrate_save(rd: Dictionary, brd: Dictionary) -> void:
     if not rd.has("current_map_id"):
         rd["current_map_id"] = GameData.STARTING_MAP
     if not rd.has("visited_by_map"):
@@ -105,6 +105,13 @@ func _migrate_save(rd: Dictionary, _brd: Dictionary) -> void:
         var legacy_explored: Dictionary = rd.get("explored_tiles", {})
         rd["explored_by_map"] = { GameData.STARTING_MAP: legacy_explored.duplicate() }
         rd.erase("explored_tiles")
+    # 인벤토리 결 (I-5 신설)
+    if not brd.has("inventory"):
+        brd["inventory"] = {}
+    if not rd.has("inventory"):
+        rd["inventory"] = brd["inventory"].duplicate()
+    if not rd.has("tools"):
+        rd["tools"] = {}
 
 
 func has_save() -> bool:

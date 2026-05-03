@@ -48,6 +48,11 @@ func _new_big_run() -> void:
         # 이벤트 발생 이력. 키 = event_id (또는 chain_root_id), 값 = 발생 횟수.
         # once_per "big_run" 필터의 단일 출처. 회귀 통과해 유지, reset() 시 소멸.
         "seen_events": {},
+
+        # 인벤토리 초기치. 회차 동안 X 변경 (RESEARCH 의 bump_initial_item 만 변경).
+        # _start_internal_run 결로 매 회차 시작 시 run["inventory"] 가 본 결의 사본 결.
+        # RPG 결로 빈 dict 결로 시작 — 게임 진행 결로 add_item 결로 박힘.
+        "inventory": {},
     }
     _setup_initial_arms_in(big_run_data)
 
@@ -70,6 +75,10 @@ func _start_internal_run() -> void:
     run_data["seen_this_run"] = {}
     run_data["pending_combat"] = {}
     run_data["phase"] = "map"
+    # 자원 시점 복귀 — big_run_data["inventory"] 의 사본 결.
+    run_data["inventory"] = big_run_data.get("inventory", {}).duplicate()
+    # 회차 한정 자원 — 매 회차 빔.
+    run_data["tools"] = {}
 
     state_changed.emit()
     # run_start 트리거 평가 — 매치 시 phase = "event" 전이.
@@ -575,9 +584,55 @@ func apply_event_action(action: Dictionary) -> bool:
             return _apply_arm_attack_boost(params)
         "arm_durability_boost":
             return _apply_arm_durability_boost(params)
+        "heal_body":
+            return _apply_heal_body(params)
+        "give_item":
+            return _apply_give_item(params)
+        "remove_item":
+            return _apply_remove_item(params)
+        "bump_initial_item":
+            return _apply_bump_initial_item(params)
         _:
             push_warning("apply_event_action: 알 수 없는 type '%s'" % type_name)
             return false
+
+
+# 본체 회복. params: { amount }. body_hp += amount, max cap.
+func _apply_heal_body(params: Dictionary) -> bool:
+    var amount: int = params.get("amount", 0)
+    var max_hp: int = run_data.get("body_max_hp", 0)
+    run_data["body_hp"] = min(max_hp, run_data.get("body_hp", 0) + amount)
+    big_run_data["body_hp"] = run_data["body_hp"]
+    return true
+
+
+# 아이템 획득. params: { item, amount }.
+func _apply_give_item(params: Dictionary) -> bool:
+    var item_id: String = params.get("item", "")
+    var amount: int = params.get("amount", 1)
+    return add_item(item_id, amount)
+
+
+# 아이템 소모. params: { item, amount }.
+func _apply_remove_item(params: Dictionary) -> bool:
+    var item_id: String = params.get("item", "")
+    var amount: int = params.get("amount", 1)
+    return _consume_item(item_id, amount)
+
+
+# RESEARCH 의 초기치 강화. params: { item, amount }.
+# big_run_data["inventory"][item] += amount. 다음 회차 _start_internal_run 의
+# duplicate 결로 자동 반영.
+func _apply_bump_initial_item(params: Dictionary) -> bool:
+    var item_id: String = params.get("item", "")
+    var amount: int = params.get("amount", 1)
+    if not GameData.ITEMS.has(item_id):
+        push_warning("_apply_bump_initial_item: 알 수 없는 item '%s'" % item_id)
+        return false
+    var inv: Dictionary = big_run_data.get("inventory", {})
+    inv[item_id] = inv.get(item_id, 0) + amount
+    big_run_data["inventory"] = inv
+    return true
 
 
 # 효과 타입 디스패처. 새 효과 추가 시 여기에 분기 한 줄 + _apply_<type> 함수 추가.
@@ -673,6 +728,67 @@ func end_internal_run(result: String) -> void:
     internal_run_ended.emit(result)
     _start_internal_run()
     internal_run_started.emit()
+
+
+# ============================================================
+# 인벤토리 (자원 / 도구) — RPG 결의 dict 컨테이너
+# ============================================================
+# 카탈로그 = GameData.ITEMS (정의 결).
+# 보유 결 = run_data["inventory"] (시점 복귀) 또는 run_data["tools"] (회차 한정).
+# scope 결로 컨테이너 분기.
+# count 0 도달 = key 자체 erase (보유 X = 키 없음).
+
+func _inventory_for_scope(scope: String) -> Dictionary:
+    match scope:
+        "big_run_default":
+            if not run_data.has("inventory"): run_data["inventory"] = {}
+            return run_data["inventory"]
+        "internal_run":
+            if not run_data.has("tools"): run_data["tools"] = {}
+            return run_data["tools"]
+        _:
+            push_warning("_inventory_for_scope: 알 수 없는 scope '%s'" % scope)
+            return {}
+
+
+# 카탈로그 결의 어떤 아이템이든 추가 가능. stack_max cap 적용.
+# 알 수 없는 item_id (= ITEMS 에 없는) → false.
+func add_item(item_id: String, amount: int = 1) -> bool:
+    var def: Dictionary = GameData.ITEMS.get(item_id, {})
+    if def.is_empty():
+        push_warning("add_item: 알 수 없는 item_id '%s'" % item_id)
+        return false
+    var inv: Dictionary = _inventory_for_scope(def.get("scope", "big_run_default"))
+    var stack_max: int = def.get("stack_max", 99)
+    inv[item_id] = min(inv.get(item_id, 0) + amount, stack_max)
+    state_changed.emit()
+    return true
+
+
+# 부족 시 false (-= X). 0 도달 시 key erase (RPG 결).
+func _consume_item(item_id: String, amount: int = 1) -> bool:
+    var def: Dictionary = GameData.ITEMS.get(item_id, {})
+    if def.is_empty(): return false
+    var inv: Dictionary = _inventory_for_scope(def.get("scope", "big_run_default"))
+    if inv.get(item_id, 0) < amount: return false
+    inv[item_id] -= amount
+    if inv[item_id] <= 0:
+        inv.erase(item_id)
+    return true
+
+
+# 명시 사용. ITEMS.use_event_id 결로 이벤트 발화 (-1 후).
+# phase != "map" / 정의 X / use_event_id null / 보유 0 → false.
+func use_item(item_id: String) -> bool:
+    if run_data.get("phase") != "map": return false
+    var def: Dictionary = GameData.ITEMS.get(item_id, {})
+    if def.is_empty(): return false
+    var event_id = def.get("use_event_id", null)
+    if event_id == null or event_id == "": return false
+    if not _consume_item(item_id, 1): return false
+    _begin_event_phase(event_id)
+    state_changed.emit()
+    return true
 
 
 # --- 변경자 — 덱 조작 (디버그·보상 공용) --------------------------------

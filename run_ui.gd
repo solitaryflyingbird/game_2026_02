@@ -38,7 +38,14 @@ var _tile_rects: Dictionary = {}     # 현 _map_root 의 tile_rects (= _tile_rec
 var _day_label: Label
 var _actions_label: Label
 var _terrain_label: Label
+var _inventory_hud_label: Label
 var _move_buttons: Dictionary = {}   # "U/D/L/R/E/REST" → Button
+
+# --- 인벤토리 패널 ---
+var _btn_show_inventory: Button
+var _inventory_panel: Panel
+var _inventory_container: VBoxContainer
+var _inventory_visible: bool = false
 
 # --- 전투 프리뷰 ---
 var _battle_preview_root: Control
@@ -78,6 +85,7 @@ func _ready():
     _build_research_screen()
     _build_save_ui()
     _build_arm_inspector()           # 맵 위에 — 노드 버튼이 인스펙터 덮지 않도록
+    _build_inventory_panel()         # 인벤토리 패널
     _build_heroine_illustration()    # 맨 마지막 — 모든 위에 그려지도록
 
 
@@ -110,6 +118,12 @@ func _on_state_changed():
             _actions_label.visible = false
         if _terrain_label != null:
             _terrain_label.visible = false
+        if _inventory_hud_label != null:
+            _inventory_hud_label.visible = false
+        if _btn_show_inventory != null:
+            _btn_show_inventory.visible = false
+        if _inventory_panel != null:
+            _inventory_panel.visible = false
         for btn in _move_buttons.values():
             btn.visible = false
         return
@@ -121,9 +135,12 @@ func _on_state_changed():
     var hide_overlay: bool = phase == "combat" or phase == "event"
     _btn_show_equipped.visible = not hide_overlay
     _btn_show_spare.visible = not hide_overlay
+    _btn_show_inventory.visible = not hide_overlay
     if hide_overlay:
         _arm_inspector_panel.visible = false
         _arm_inspect_mode = ""
+        _inventory_panel.visible = false
+        _inventory_visible = false
     _heroine_sprite.visible = _arm_inspector_panel.visible
 
     show_phase(phase)
@@ -136,6 +153,7 @@ func _on_state_changed():
     _refresh_balance_label(phase)
     _refresh_research_screen(phase)
     _refresh_save_button(phase)
+    _refresh_inventory_panel()
 
     if phase == "combat":
         $battle_ui.begin_combat()
@@ -491,6 +509,13 @@ func _build_grid_hud() -> void:
     _terrain_label.visible = false
     add_child(_terrain_label)
 
+    _inventory_hud_label = Label.new()
+    _inventory_hud_label.position = Vector2(40, 120)
+    _inventory_hud_label.size = Vector2(180, 28)
+    _inventory_hud_label.add_theme_font_size_override("font_size", 14)
+    _inventory_hud_label.visible = false
+    add_child(_inventory_hud_label)
+
     var btn_specs: Array = [
         ["U",    "↑",       Vector2(120, 540), Vector2i(0, -1)],
         ["L",    "←",       Vector2(72,  580), Vector2i(-1, 0)],
@@ -526,6 +551,7 @@ func _refresh_grid_hud(phase: String) -> void:
     if _day_label != null: _day_label.visible = show
     if _actions_label != null: _actions_label.visible = show
     if _terrain_label != null: _terrain_label.visible = show
+    if _inventory_hud_label != null: _inventory_hud_label.visible = show
     for btn in _move_buttons.values():
         btn.visible = show
     if not show:
@@ -543,6 +569,22 @@ func _refresh_grid_hud(phase: String) -> void:
     _terrain_label.text = "%s — %s  (%d, %d)" % [
         RunManager.get_current_map_name(),
         RunManager.get_terrain_name(pos), pos.x, pos.y]
+    _inventory_hud_label.text = _format_inventory_hud(d)
+
+
+# 보유 > 0 모든 아이템 결 자동 표시. 카탈로그 결 자동 — 새 결 추가 시 코드 변경 X.
+func _format_inventory_hud(d: Dictionary) -> String:
+    var parts: Array = []
+    for item_id in GameData.ITEMS.keys():
+        var def: Dictionary = GameData.ITEMS[item_id]
+        var scope: String = def.get("scope", "big_run_default")
+        var inv: Dictionary = d.get("tools" if scope == "internal_run" else "inventory", {})
+        var count: int = inv.get(item_id, 0)
+        if count > 0:
+            parts.append("%s %d" % [def.get("name", item_id), count])
+    if parts.is_empty():
+        return "(인벤토리 비어있음)"
+    return "  ".join(parts)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -832,3 +874,106 @@ func _on_save_pressed() -> void:
 
 func _on_save_feedback_timeout() -> void:
     _save_feedback_label.visible = false
+
+
+# ============================================================
+# 인벤토리 패널 (RPG 결 — 보유 결만 + 카테고리 자동)
+# ============================================================
+
+func _build_inventory_panel() -> void:
+    _btn_show_inventory = Button.new()
+    _btn_show_inventory.text = "인벤토리"
+    _btn_show_inventory.position = Vector2(1100, 212)   # 타이틀로 (y=174+32) 아래
+    _btn_show_inventory.custom_minimum_size = Vector2(140, 32)
+    _btn_show_inventory.pressed.connect(_on_show_inventory_pressed)
+    _btn_show_inventory.visible = false
+    add_child(_btn_show_inventory)
+
+    _inventory_panel = Panel.new()
+    _inventory_panel.position = Vector2(900, 250)
+    _inventory_panel.size = Vector2(340, 380)
+    _inventory_panel.visible = false
+    add_child(_inventory_panel)
+
+    _inventory_container = VBoxContainer.new()
+    _inventory_container.position = Vector2(12, 12)
+    _inventory_container.size = Vector2(316, 356)
+    _inventory_container.add_theme_constant_override("separation", 6)
+    _inventory_panel.add_child(_inventory_container)
+
+
+func _on_show_inventory_pressed() -> void:
+    _inventory_visible = not _inventory_visible
+    _inventory_panel.visible = _inventory_visible
+    if _inventory_visible:
+        _refresh_inventory_panel()
+
+
+func _refresh_inventory_panel() -> void:
+    if _inventory_panel == null or not _inventory_panel.visible:
+        return
+    for child in _inventory_container.get_children():
+        child.queue_free()
+
+    var d: Dictionary = RunManager.run_data
+    var big_inv: Dictionary = d.get("inventory", {})
+    var tools: Dictionary = d.get("tools", {})
+
+    # 카테고리 자동 결 — ITEMS 의 category 결 수집. 보유 > 0 만.
+    var by_category: Dictionary = {}
+    for item_id in GameData.ITEMS.keys():
+        var def: Dictionary = GameData.ITEMS[item_id]
+        var scope: String = def.get("scope", "big_run_default")
+        var inv: Dictionary = (tools if scope == "internal_run" else big_inv)
+        var count: int = inv.get(item_id, 0)
+        if count <= 0:
+            continue   # 보유 0 = 미표시 (RPG 결)
+        var cat: String = def.get("category", "기타")
+        if not by_category.has(cat):
+            by_category[cat] = []
+        by_category[cat].append({"id": item_id, "def": def, "count": count})
+
+    if by_category.is_empty():
+        _inventory_container.add_child(_make_label("(인벤토리 비어있음)", 13))
+        return
+
+    # 카테고리 결로 sort + 표시
+    var cats: Array = by_category.keys()
+    cats.sort()
+    for cat in cats:
+        var items: Array = by_category[cat]
+        _inventory_container.add_child(
+            _make_label("=== %s ===" % _category_title(cat), 13))
+        for entry in items:
+            _inventory_container.add_child(_make_inventory_entry(entry))
+
+
+func _category_title(cat: String) -> String:
+    return GameData.CATEGORY_NAMES.get(cat, cat)
+
+
+func _make_inventory_entry(entry: Dictionary) -> Control:
+    var def: Dictionary = entry["def"]
+    var count: int = entry["count"]
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation", 8)
+
+    var name_lbl := Label.new()
+    name_lbl.text = "%s × %d" % [def.get("name", "?"), count]
+    name_lbl.add_theme_font_size_override("font_size", 12)
+    name_lbl.custom_minimum_size = Vector2(180, 24)
+    row.add_child(name_lbl)
+
+    var use_event_id = def.get("use_event_id", null)
+    if use_event_id != null and use_event_id != "":
+        var btn := Button.new()
+        btn.text = "사용"
+        btn.custom_minimum_size = Vector2(60, 24)
+        btn.pressed.connect(_on_use_item_pressed.bind(entry["id"]))
+        row.add_child(btn)
+
+    return row
+
+
+func _on_use_item_pressed(item_id: String) -> void:
+    RunManager.use_item(item_id)
